@@ -12,6 +12,8 @@ export interface User {
   avatar?: string;
   ordersCount?: number;
   couponsCount?: number;
+  whatsapp?: string;
+  address?: string;
 }
 
 export interface Product {

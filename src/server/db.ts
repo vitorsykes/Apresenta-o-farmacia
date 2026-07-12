@@ -196,7 +196,7 @@ const DEFAULT_USERS: User[] = [
   },
   {
     id: "user-admin-1",
-    email: "admin@vitalidade.com.br",
+    email: "admin@admin.com",
     name: "Admin Central",
     role: UserRole.ADMIN,
     avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuCbGxXPKa2qwX32b7l-H4YFSp9nLbNhyU57wKvvGI-9MM3MzHjYvpdjPNPbmV5jtvr3TmJRVqo8QV0RwUS0fBM_aWsz60wRbqTA2EySgLxSVB2eZWDVsOyXKr6Dvjt0r3vNd43Y4Dem2CyDuzBZiuVztGMZS8gXbx2FT8oFiU9klCdOnmcLRujSCx2bHgyIeGl9wPXicycxe9PR0cmz4pWCKqwIoWvbuupiAC7WAag387MuCIj-WjIp"
@@ -347,7 +347,10 @@ export class JSONDatabase {
     return user;
   }
   public updateUser(user: User) {
-    const idx = this.data.users.findIndex(u => u.id === user.id);
+    let idx = this.data.users.findIndex(u => u.id === user.id);
+    if (idx === -1) {
+      idx = this.data.users.findIndex(u => u.email === user.email);
+    }
     if (idx !== -1) {
       this.data.users[idx] = { ...this.data.users[idx], ...user };
       this.save();
@@ -457,7 +460,33 @@ export class JSONDatabase {
     this.save();
   }
 
-  public getStats() { return this.data.stats; }
+  public getStats() {
+    this.recalculateStats();
+    this.data.stats.usersCount = this.data.users.length;
+    const salesCount = this.data.orders.filter(o => o.status !== "Cancelado").length;
+    this.data.stats.salesConversionRate = parseFloat(((salesCount / (this.data.stats.accessCount || 1)) * 100).toFixed(1));
+    this.save();
+    return this.data.stats;
+  }
+  public resetStats() {
+    this.data.stats.accessCount = 0;
+    this.data.stats.loginsCount = 0;
+    this.data.stats.salesConversionRate = 0;
+    this.data.orders = [];
+    this.data.products.forEach(p => {
+      p.views = 0;
+      p.searches = 0;
+      p.cartAdds = 0;
+      p.favoritesCount = 0;
+      p.averageViewTime = 0;
+    });
+    this.data.users.forEach(u => {
+      u.ordersCount = 0;
+    });
+    this.data.searchHistory = {};
+    this.data.viewHistory = {};
+    this.save();
+  }
   public incrementAccessCount() {
     this.data.stats.accessCount++;
     this.save();

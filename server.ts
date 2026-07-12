@@ -5,8 +5,24 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import { db } from "./src/server/db.js";
 import { UserRole } from "./src/types.js";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
+
+// Initialize Supabase safely
+let supabase: ReturnType<typeof createClient> | null = null;
+const supabaseUrl = process.env.SUPABASE_URL || "https://eygunisvclakxyetlwsf.supabase.co";
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "sb_publishable_i7b_hzFbK5Smwilj1aVFMA_nez4VSDm";
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (supabaseUrl && (supabaseServiceKey || supabaseAnonKey)) {
+  supabase = createClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
+}
 
 const isProd = process.env.NODE_ENV === "production";
 const PORT = 3000;
@@ -32,6 +48,71 @@ async function startServer() {
   const app = express();
   app.use(express.json());
 
+  // Synchronize/Create Admin in local database and Supabase Auth
+  let localAdmin = db.getUsers().find(u => u.email === "admin@admin.com");
+  if (!localAdmin) {
+    const oldAdmin = db.getUsers().find(u => u.role === UserRole.ADMIN);
+    if (oldAdmin) {
+      console.log("Renaming existing admin in local database to admin@admin.com...");
+      oldAdmin.email = "admin@admin.com";
+      oldAdmin.name = "Admin Central";
+      db.updateUser(oldAdmin);
+      localAdmin = oldAdmin;
+    } else {
+      console.log("Adding default admin to local database...");
+      localAdmin = db.addUser({
+        id: "user-admin-1",
+        email: "admin@admin.com",
+        name: "Admin Central",
+        role: UserRole.ADMIN,
+        avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuCbGxXPKa2qwX32b7l-H4YFSp9nLbNhyU57wKvvGI-9MM3MzHjYvpdjPNPbmV5jtvr3TmJRVqo8QV0RwUS0fBM_aWsz60wRbqTA2EySgLxSVB2eZWDVsOyXKr6Dvjt0r3vNd43Y4Dem2CyDuzBZiuVztGMZS8gXbx2FT8oFiU9klCdOnmcLRujSCx2bHgyIeGl9wPXicycxe9PR0cmz4pWCKqwIoWvbuupiAC7WAag387MuCIj-WjIp"
+      });
+    }
+  }
+
+  if (supabase) {
+    try {
+      console.log("Ensuring admin@admin.com exists in Supabase Auth...");
+      const { data: adminData, error: adminError } = await supabase.auth.admin.createUser({
+        email: "admin@admin.com",
+        password: "admin2759",
+        email_confirm: true,
+        user_metadata: { name: "Admin Central", role: "admin" }
+      });
+      
+      if (adminError) {
+        if (adminError.message.includes("already registered") || adminError.message.includes("already exists")) {
+          console.log("Admin admin@admin.com already registered in Supabase. Updating credentials...");
+          const { data: usersData, error: listError } = await supabase.auth.admin.listUsers();
+          if (!listError && usersData?.users) {
+            const existingAdmin = (usersData.users as any[]).find(u => u.email === "admin@admin.com");
+            if (existingAdmin) {
+              await supabase.auth.admin.updateUserById(existingAdmin.id, {
+                password: "admin2759",
+                user_metadata: { name: "Admin Central", role: "admin" }
+              });
+              if (localAdmin && localAdmin.id !== existingAdmin.id) {
+                console.log(`Syncing local admin ID to Supabase UUID: ${existingAdmin.id}`);
+                localAdmin.id = existingAdmin.id;
+                db.updateUser(localAdmin);
+              }
+            }
+          }
+        } else {
+          console.error("Failed to ensure admin in Supabase:", adminError.message);
+        }
+      } else if (adminData?.user) {
+        console.log("Successfully created admin@admin.com in Supabase Auth.");
+        if (localAdmin) {
+          localAdmin.id = adminData.user.id;
+          db.updateUser(localAdmin);
+        }
+      }
+    } catch (err: any) {
+      console.error("Error provisioning admin in Supabase:", err.message);
+    }
+  }
+
   // Track global views
   app.use((req, res, next) => {
     if (!req.path.startsWith("/api") && !req.path.includes(".")) {
@@ -54,8 +135,8 @@ async function startServer() {
   // --- REST API Endpoints ---
 
   // Auth
-  app.post("/api/auth/login", (req, res) => {
-    const { email, password, googleToken } = req.body;
+  app.post("/api/auth/login", async (req, res) => {
+    const { email, password, googleToken, whatsapp, name } = req.body;
     db.incrementLoginsCount();
 
     if (googleToken) {
@@ -63,44 +144,147 @@ async function startServer() {
       // Check if user already exists
       let user = db.getUsers().find(u => u.email === email);
       if (!user) {
-        // Create new client user
+        if (!whatsapp) {
+          return res.status(400).json({ error: "O número de WhatsApp é obrigatório para cadastro com Google." });
+        }
+        // Create new client user with WhatsApp
         user = db.addUser({
           id: "user-google-" + Math.random().toString(36).substr(2, 9),
           email,
-          name: email.split("@")[0].replace(".", " "),
+          name: name || email.split("@")[0].replace(".", " "),
           role: UserRole.CLIENT,
           avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuCOTJF9BDj3cbHUIo5z425NXtv-6jab9X0me8Cg7SvnJxaecC3g2nFEs_AyTfy_5OX6dIFCs5rfi-46cR21-QpH0fXw8wTOW9Ylvt4L5YpZOrAL5S1hftzg2X_S7XkTE9gmetub5hgpVHAGJbm1HFmydP2SaMvMTBJPQd56l3ywx8Iqm_tioBOcgIxUGfbY69HELEDGqVVG7R7-YKBz4TT1uLL0MNlhUZtsTrDOHpCoqpGI9dPIH23a",
           ordersCount: 0,
-          couponsCount: 1
+          couponsCount: 1,
+          whatsapp: whatsapp,
+          address: ""
         });
+      } else if (!user.whatsapp) {
+        if (!whatsapp) {
+          return res.status(400).json({ error: "O número de WhatsApp é obrigatório para sua conta." });
+        }
+        user.whatsapp = whatsapp;
+        db.updateUser(user);
       }
       return res.json({ user, token: user.id });
     }
 
+    if (supabase) {
+      try {
+        console.log(`Authenticating user with Supabase Auth: ${email}`);
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+
+        if (error) {
+          console.error("Supabase authentication failed:", error.message);
+          return res.status(401).json({ error: "E-mail ou senha incorretos." });
+        }
+
+        if (data.user) {
+          // Check if user exists in our local JSON db profile
+          let user = db.getUsers().find(u => u.email === email || u.id === data.user.id);
+          if (!user) {
+            // User was created directly in Supabase console/admin
+            console.log(`User ${email} exists in Supabase but not in local profiles. Syncing user...`);
+            user = db.addUser({
+              id: data.user.id,
+              email: data.user.email || email,
+              name: data.user.user_metadata?.name || email.split("@")[0],
+              role: (email === "admin@admin.com" || email === "admin@farmacia.com" || data.user.user_metadata?.role === "admin") ? UserRole.ADMIN : UserRole.CLIENT,
+              avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuDyT29-NQE_libaRCpj1TBdlgoz2ZYG3wx8KJN1FTz8iR0EUyry0crXzKMcXTMyN8ZG3cf5rr3LXivlp8c8tk24F8CMXkkrmHbSZjwAIrdsYQ4pu7noyQgJxrsLJEDpxyYGu2s6ylEMHNrXhZUNH19ca7iogSJsZB6F9BlXEtDVQWiGiavWZrxQC7K6KcCu-dkFe95QBcUaJrKZKddflKYwVUDy1QrhccvKuBX6zouI_pIvWbqlAfPI",
+              ordersCount: 0,
+              couponsCount: 2,
+              whatsapp: data.user.user_metadata?.whatsapp || "",
+              address: data.user.user_metadata?.address || ""
+            });
+          } else if (user.id !== data.user.id) {
+            // Update local ID to match Supabase UUID
+            console.log(`Syncing local user ID to match Supabase Auth UUID for ${email}`);
+            user.id = data.user.id;
+            db.updateUser(user);
+          }
+
+          return res.json({ user, token: user.id });
+        }
+      } catch (err: any) {
+        console.error("Supabase authentication connection error:", err.message);
+        return res.status(500).json({ error: "Erro na integração com Supabase: " + err.message });
+      }
+    }
+
+    // Fallback if Supabase is disabled/not initialized
     const user = db.getUsers().find(u => u.email === email);
     if (user) {
-      // Password simulation: any password works for pre-seeded or matching password
       return res.json({ user, token: user.id });
     }
 
     return res.status(401).json({ error: "E-mail ou senha incorretos." });
   });
 
-  app.post("/api/auth/register", (req, res) => {
-    const { email, name } = req.body;
+  app.post("/api/auth/register", async (req, res) => {
+    const { email, name, password, whatsapp, address } = req.body;
     const existing = db.getUsers().find(u => u.email === email);
     if (existing) {
       return res.status(400).json({ error: "E-mail já cadastrado." });
     }
 
+    let supabaseId = "user-client-" + Math.random().toString(36).substr(2, 9);
+
+    if (supabase) {
+      try {
+        console.log(`Registering user in Supabase Auth: ${email}`);
+        
+        // We attempt to create a pre-confirmed user using Admin Auth API (since we have service role key)
+        // to bypass SMTP email verification constraints, which is perfect for development!
+        const { data: adminData, error: adminError } = await supabase.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: { name, whatsapp, address }
+        });
+
+        if (adminError) {
+          console.warn("Supabase Auth admin creation failed, falling back to standard signUp:", adminError.message);
+          // Standard signup fallback
+          const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: { name, whatsapp, address }
+            }
+          });
+
+          if (error) {
+            console.error("Supabase signUp failed:", error.message);
+            return res.status(400).json({ error: "Supabase: " + error.message });
+          }
+
+          if (data.user) {
+            supabaseId = data.user.id;
+          }
+        } else if (adminData?.user) {
+          supabaseId = adminData.user.id;
+        }
+      } catch (err: any) {
+        console.error("Supabase registration connection error:", err.message);
+        return res.status(500).json({ error: "Erro na integração com Supabase: " + err.message });
+      }
+    }
+
+    const userRole = (email === "admin@admin.com" || email === "admin@farmacia.com" || email === "admin@vitalidade.com.br") ? UserRole.ADMIN : UserRole.CLIENT;
+
     const user = db.addUser({
-      id: "user-client-" + Math.random().toString(36).substr(2, 9),
+      id: supabaseId,
       email,
       name,
-      role: UserRole.CLIENT,
+      role: userRole,
       avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuDyT29-NQE_libaRCpj1TBdlgoz2ZYG3wx8KJN1FTz8iR0EUyry0crXzKMcXTMyN8ZG3cf5rr3LXivlp8c8tk24F8CMXkkrmHbSZjwAIrdsYQ4pu7noyQgJxrsLJEDpxyYGu2s6ylEMHNrXhZUNH19ca7iogSJsZB6F9BlXEtDVQWiGiavWZrxQC7K6KcCu-dkFe95QBcUaJrKZKddflKYwVUDy1QrhccvKuBX6zouI_pIvWbqlAfPI",
       ordersCount: 0,
-      couponsCount: 2
+      couponsCount: 2,
+      whatsapp: whatsapp || "",
+      address: address || ""
     });
 
     res.json({ user, token: user.id });
@@ -329,6 +513,16 @@ async function startServer() {
     res.json(db.getStats());
   });
 
+  app.post("/api/stats/reset", (req, res) => {
+    const user = getSessionUser(req);
+    if (!user || user.role !== UserRole.ADMIN) {
+      return res.status(403).json({ error: "Não autorizado." });
+    }
+    db.resetStats();
+    db.addLog(user.id, user.name, "Reset de Estatísticas", "Todas as estatísticas do painel geral foram zeradas.");
+    res.json({ success: true, stats: db.getStats() });
+  });
+
   // Favorites
   app.get("/api/favorites", (req, res) => {
     const user = getSessionUser(req);
@@ -371,9 +565,11 @@ async function startServer() {
     const user = getSessionUser(req);
     if (!user) return res.status(401).json({ error: "Não autorizado." });
 
-    const { name, email } = req.body;
+    const { name, email, whatsapp, address } = req.body;
     user.name = name;
     user.email = email;
+    if (whatsapp !== undefined) user.whatsapp = whatsapp;
+    if (address !== undefined) user.address = address;
     db.updateUser(user);
 
     res.json(user);

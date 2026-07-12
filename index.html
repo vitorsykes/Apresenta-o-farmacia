@@ -4,6 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Google AI Studio App</title>
+    <script>
+      // Gracefully silence benign Vite HMR / WebSocket errors in the sandboxed preview environment
+      window.addEventListener('error', function(e) {
+        const msg = e.message || '';
+        if (msg.includes('websocket') || msg.includes('WebSocket') || msg.includes('vite') || msg.includes('HMR')) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, true);
+
+      window.addEventListener('unhandledrejection', function(e) {
+        const reason = (e.reason && (e.reason.message || e.reason.toString())) || '';
+        if (reason.includes('websocket') || reason.includes('WebSocket') || reason.includes('vite') || reason.includes('HMR') || reason.includes('closed without opened')) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, true);
+    </script>
   </head>
   <body>
     <div id="root"></div>

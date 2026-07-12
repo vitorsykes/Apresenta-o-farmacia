@@ -25,10 +25,17 @@ export default function Profile({
   const [editMode, setEditMode] = useState(false);
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
+  const [whatsapp, setWhatsapp] = useState(user.whatsapp || "");
+  const [address, setAddress] = useState(user.address || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setName(user.name);
+    setEmail(user.email);
+    setWhatsapp(user.whatsapp || "");
+    setAddress(user.address || "");
+
     const loadProfileData = async () => {
       try {
         const [ordersList, couponsList] = await Promise.all([
@@ -49,7 +56,7 @@ export default function Profile({
     setSaving(true);
     setError(null);
     try {
-      const updated = await api.updateProfile(name, email);
+      const updated = await api.updateProfile(name, email, whatsapp, address);
       onUpdateUser(updated);
       setEditMode(false);
     } catch (err: any) {
@@ -87,7 +94,19 @@ export default function Profile({
             </div>
 
             <h2 className="font-bold text-lg text-[#1b1c1c]">{user.name}</h2>
-            <p className="text-xs text-[#727783] font-semibold mb-6">{user.email}</p>
+            <p className="text-xs text-[#727783] font-semibold mb-2">{user.email}</p>
+
+            {user.whatsapp && (
+              <p className="text-xs text-[#424751] font-medium flex items-center gap-1 mt-0.5">
+                <span className="font-bold text-[#003e7a]">WhatsApp:</span> {user.whatsapp}
+              </p>
+            )}
+            {user.address && (
+              <p className="text-xs text-[#424751] font-medium mt-0.5 max-w-[240px] text-center">
+                <span className="font-bold text-[#003e7a]">Endereço:</span> {user.address}
+              </p>
+            )}
+            <div className="mb-4" />
 
             {/* Quick counters */}
             <div className="grid grid-cols-2 gap-4 w-full border-t border-b border-[#c2c6d3]/20 py-4 mb-6">
@@ -165,6 +184,28 @@ export default function Profile({
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-[#424751]">WhatsApp</label>
+                  <input 
+                    className="rounded-lg border border-[#c2c6d3] px-3 py-2 text-xs focus:border-[#003e7a] outline-none w-full" 
+                    type="tel"
+                    value={whatsapp}
+                    onChange={(e) => setWhatsapp(e.target.value)}
+                    placeholder="(99) 99999-9999"
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-[#424751]">Endereço</label>
+                  <input 
+                    className="rounded-lg border border-[#c2c6d3] px-3 py-2 text-xs focus:border-[#003e7a] outline-none w-full" 
+                    type="text"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Rua, Número, Bairro, Cidade - UF"
                     required
                   />
                 </div>

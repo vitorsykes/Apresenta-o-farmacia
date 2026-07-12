@@ -13,11 +13,11 @@ const getHeaders = () => {
 
 export const api = {
   // Auth
-  login: async (email: string, password?: string, googleToken?: string): Promise<{ user: User; token: string }> => {
+  login: async (email: string, password?: string, googleToken?: string, whatsapp?: string, name?: string): Promise<{ user: User; token: string }> => {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, googleToken })
+      body: JSON.stringify({ email, password, googleToken, whatsapp, name })
     });
     if (!res.ok) {
       const err = await res.json();
@@ -28,11 +28,11 @@ export const api = {
     return data;
   },
 
-  register: async (email: string, name: string): Promise<{ user: User; token: string }> => {
+  register: async (email: string, name: string, whatsapp?: string, address?: string): Promise<{ user: User; token: string }> => {
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, name })
+      body: JSON.stringify({ email, name, whatsapp, address })
     });
     if (!res.ok) {
       const err = await res.json();
@@ -43,11 +43,11 @@ export const api = {
     return data;
   },
 
-  updateProfile: async (name: string, email: string): Promise<User> => {
+  updateProfile: async (name: string, email: string, whatsapp?: string, address?: string): Promise<User> => {
     const res = await fetch("/api/auth/profile", {
       method: "PUT",
       headers: getHeaders(),
-      body: JSON.stringify({ name, email })
+      body: JSON.stringify({ name, email, whatsapp, address })
     });
     if (!res.ok) throw new Error("Erro ao atualizar perfil");
     return res.json();
@@ -204,6 +204,16 @@ export const api = {
   getStats: async (): Promise<DashboardStats> => {
     const res = await fetch("/api/stats", { headers: getHeaders() });
     return res.json();
+  },
+
+  resetStats: async (): Promise<DashboardStats> => {
+    const res = await fetch("/api/stats/reset", {
+      method: "POST",
+      headers: getHeaders()
+    });
+    if (!res.ok) throw new Error("Erro ao zerar estatísticas");
+    const data = await res.json();
+    return data.stats;
   },
 
   // Favorites

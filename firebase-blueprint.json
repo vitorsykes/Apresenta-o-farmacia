@@ -1,0 +1,191 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile database",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "avatar": { "type": "string" },
+        "ordersCount": { "type": "integer" },
+        "couponsCount": { "type": "integer" },
+        "whatsapp": { "type": "string" },
+        "address": { "type": "string" }
+      },
+      "required": ["id", "email", "name", "role"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Product categories",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "sortOrder": { "type": "integer" },
+        "icon": { "type": "string" },
+        "gradientIndex": { "type": "integer" }
+      },
+      "required": ["id", "name", "sortOrder"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Pharmacy product listing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "promoPrice": { "type": "number" },
+        "promoExpiry": { "type": "string" },
+        "imageUrls": { "type": "array" },
+        "stock": { "type": "integer" },
+        "isFeatured": { "type": "boolean" },
+        "isPromo": { "type": "boolean" },
+        "laboratory": { "type": "string" },
+        "presentation": { "type": "string" },
+        "indications": { "type": "string" },
+        "simplifiedLeaflet": { "type": "string" },
+        "expiryDate": { "type": "string" },
+        "views": { "type": "integer" },
+        "searches": { "type": "integer" },
+        "averageViewTime": { "type": "integer" },
+        "cartAdds": { "type": "integer" },
+        "favoritesCount": { "type": "integer" }
+      },
+      "required": ["id", "name", "description", "category", "price", "imageUrls", "stock"]
+    },
+    "Promotion": {
+      "title": "Promotion",
+      "description": "Promotional banners and offers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string" },
+        "bannerUrl": { "type": "string" },
+        "displayStart": { "type": "string" },
+        "displayEnd": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "title", "type", "bannerUrl", "displayStart", "displayEnd"]
+    },
+    "Flyer": {
+      "title": "Flyer",
+      "description": "Pharmacy promotional leaflets",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "displayStart": { "type": "string" },
+        "displayEnd": { "type": "string" }
+      },
+      "required": ["id", "title", "imageUrl", "displayStart", "displayEnd"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Client orders",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "items": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "discount": { "type": "number" },
+        "freight": { "type": "number" },
+        "total": { "type": "number" },
+        "status": { "type": "string" },
+        "deliveryType": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "address": { "type": "object" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "userName", "items", "subtotal", "discount", "freight", "total", "status", "deliveryType", "paymentMethod", "address", "createdAt"]
+    },
+    "Coupon": {
+      "title": "Coupon",
+      "description": "Discount coupons",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "discountAmount": { "type": "number" },
+        "minPurchase": { "type": "number" },
+        "expiryDate": { "type": "string" }
+      },
+      "required": ["id", "code", "discountAmount", "minPurchase", "expiryDate"]
+    },
+    "AdminLog": {
+      "title": "AdminLog",
+      "description": "Audit trail logs for administrative tasks",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "adminId": { "type": "string" },
+        "adminName": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "adminId", "adminName", "action", "details", "timestamp"]
+    },
+    "DashboardStats": {
+      "title": "DashboardStats",
+      "description": "Metrics and counts for general dashboard tracking",
+      "type": "object",
+      "properties": {
+        "accessCount": { "type": "integer" },
+        "loginsCount": { "type": "integer" },
+        "salesConversionRate": { "type": "number" },
+        "usersCount": { "type": "integer" },
+        "outOfStockCount": { "type": "integer" },
+        "nearExpiryCount": { "type": "integer" }
+      },
+      "required": ["accessCount", "loginsCount", "salesConversionRate", "usersCount", "outOfStockCount", "nearExpiryCount"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile collection"
+    },
+    "/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Categories for products"
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Products list"
+    },
+    "/promotions/{promoId}": {
+      "schema": "Promotion",
+      "description": "Promotional banners"
+    },
+    "/flyers/{flyerId}": {
+      "schema": "Flyer",
+      "description": "Weekly flyers"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Client orders"
+    },
+    "/coupons/{couponId}": {
+      "schema": "Coupon",
+      "description": "Discount coupons"
+    },
+    "/admin_logs/{logId}": {
+      "schema": "AdminLog",
+      "description": "Audit log"
+    },
+    "/dashboard_stats/{statsId}": {
+      "schema": "DashboardStats",
+      "description": "Aggregated analytics"
+    }
+  }
+}
