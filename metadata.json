@@ -1,0 +1,6 @@
+{
+  "name": "Vitalidade Farmácia",
+  "description": "Aplicativo de nível comercial para a rede de farmácias Vitalidade, integrando busca inteligente por IA com Gemini, painel administrativo e controle de estoque.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
