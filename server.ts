@@ -44,33 +44,33 @@ if (process.env.GEMINI_API_KEY) {
   }
 }
 
-async function startServer() {
-  const app = express();
-  app.use(express.json());
+const app = express();
+app.use(express.json());
 
-  // Synchronize/Create Admin in local database and Supabase Auth
-  let localAdmin = db.getUsers().find(u => u.email === "admin@admin.com");
-  if (!localAdmin) {
-    const oldAdmin = db.getUsers().find(u => u.role === UserRole.ADMIN);
-    if (oldAdmin) {
-      console.log("Renaming existing admin in local database to admin@admin.com...");
-      oldAdmin.email = "admin@admin.com";
-      oldAdmin.name = "Admin Central";
-      db.updateUser(oldAdmin);
-      localAdmin = oldAdmin;
-    } else {
-      console.log("Adding default admin to local database...");
-      localAdmin = db.addUser({
-        id: "user-admin-1",
-        email: "admin@admin.com",
-        name: "Admin Central",
-        role: UserRole.ADMIN,
-        avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuCbGxXPKa2qwX32b7l-H4YFSp9nLbNhyU57wKvvGI-9MM3MzHjYvpdjPNPbmV5jtvr3TmJRVqo8QV0RwUS0fBM_aWsz60wRbqTA2EySgLxSVB2eZWDVsOyXKr6Dvjt0r3vNd43Y4Dem2CyDuzBZiuVztGMZS8gXbx2FT8oFiU9klCdOnmcLRujSCx2bHgyIeGl9wPXicycxe9PR0cmz4pWCKqwIoWvbuupiAC7WAag387MuCIj-WjIp"
-      });
-    }
+// Synchronize/Create Admin in local database and Supabase Auth
+let localAdmin = db.getUsers().find(u => u.email === "admin@admin.com");
+if (!localAdmin) {
+  const oldAdmin = db.getUsers().find(u => u.role === UserRole.ADMIN);
+  if (oldAdmin) {
+    console.log("Renaming existing admin in local database to admin@admin.com...");
+    oldAdmin.email = "admin@admin.com";
+    oldAdmin.name = "Admin Central";
+    db.updateUser(oldAdmin);
+    localAdmin = oldAdmin;
+  } else {
+    console.log("Adding default admin to local database...");
+    localAdmin = db.addUser({
+      id: "user-admin-1",
+      email: "admin@admin.com",
+      name: "Admin Central",
+      role: UserRole.ADMIN,
+      avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuCbGxXPKa2qwX32b7l-H4YFSp9nLbNhyU57wKvvGI-9MM3MzHjYvpdjPNPbmV5jtvr3TmJRVqo8QV0RwUS0fBM_aWsz60wRbqTA2EySgLxSVB2eZWDVsOyXKr6Dvjt0r3vNd43Y4Dem2CyDuzBZiuVztGMZS8gXbx2FT8oFiU9klCdOnmcLRujSCx2bHgyIeGl9wPXicycxe9PR0cmz4pWCKqwIoWvbuupiAC7WAag387MuCIj-WjIp"
+    });
   }
+}
 
-  if (supabase) {
+if (supabase) {
+  (async () => {
     try {
       console.log("Ensuring admin@admin.com exists in Supabase Auth...");
       const { data: adminData, error: adminError } = await supabase.auth.admin.createUser({
@@ -111,7 +111,8 @@ async function startServer() {
     } catch (err: any) {
       console.error("Error provisioning admin in Supabase:", err.message);
     }
-  }
+  })();
+}
 
   // Track global views
   app.use((req, res, next) => {
@@ -708,23 +709,32 @@ Ao final, liste os IDs dos produtos recomendados no seguinte formato exato no fi
   });
 
   // --- Dev / Prod serving ---
-  if (!isProd) {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+  const isVercel = process.env.VERCEL === "1" || !!process.env.NOW_REGION;
+
+  if (!isVercel) {
+    async function setupAndListen() {
+      if (!isProd) {
+        const vite = await createViteServer({
+          server: { middlewareMode: true },
+          appType: "spa",
+        });
+        app.use(vite.middlewares);
+      } else {
+        const distPath = path.join(process.cwd(), "dist");
+        app.use(express.static(distPath));
+        app.get("*", (req, res) => {
+          res.sendFile(path.join(distPath, "index.html"));
+        });
+      }
+
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`Server running on http://0.0.0.0:${PORT}`);
+      });
+    }
+
+    setupAndListen().catch((err) => {
+      console.error("Failed to start local server:", err);
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
-  });
-}
-
-startServer();
+export default app;
