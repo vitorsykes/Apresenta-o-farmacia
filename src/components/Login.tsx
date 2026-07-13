@@ -365,12 +365,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           </>
         )}
 
-        {/* Demo Hints helper */}
-        <div className="border-t border-[#c2c6d3]/50 pt-3 text-[11px] text-[#727783] leading-relaxed flex flex-col gap-0.5">
-          <p className="font-bold">Dicas de demonstração:</p>
-          <p>• Admin: <span className="font-semibold text-xs text-[#003e7a]">admin@vitalidade.com.br</span> (senha: admin)</p>
-          <p>• Cliente: <span className="font-semibold text-xs text-[#003e7a]">joao.silva@exemplo.com.br</span> (senha: 123)</p>
-        </div>
+
       </main>
     </div>
   );
