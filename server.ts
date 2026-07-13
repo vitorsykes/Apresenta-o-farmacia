@@ -495,6 +495,67 @@ async function startServer() {
     res.json(db.getCoupons());
   });
 
+  app.post("/api/coupons", (req, res) => {
+    const user = getSessionUser(req);
+    if (!user || user.role !== UserRole.ADMIN) {
+      return res.status(403).json({ error: "Não autorizado." });
+    }
+    const { code, discountAmount, minPurchase, expiryDate, targetProducts, targetCategories } = req.body;
+    if (!code || !discountAmount) {
+      return res.status(400).json({ error: "Código e valor de desconto são obrigatórios." });
+    }
+    const newCoupon = db.addCoupon({
+      id: "coup-" + Math.random().toString(36).substr(2, 9),
+      code: code.trim().toUpperCase(),
+      discountAmount: parseFloat(discountAmount) || 0,
+      minPurchase: parseFloat(minPurchase) || 0,
+      expiryDate: expiryDate || "",
+      targetProducts: targetProducts || [],
+      targetCategories: targetCategories || []
+    });
+    db.addLog(user.id, user.name, "Criação de Cupom", `Cupom "${newCoupon.code}" de desconto R$ ${newCoupon.discountAmount} criado.`);
+    res.json(newCoupon);
+  });
+
+  app.put("/api/coupons/:id", (req, res) => {
+    const user = getSessionUser(req);
+    if (!user || user.role !== UserRole.ADMIN) {
+      return res.status(403).json({ error: "Não autorizado." });
+    }
+    const couponId = req.params.id;
+    const { code, discountAmount, minPurchase, expiryDate, targetProducts, targetCategories } = req.body;
+    
+    const updated = db.updateCoupon(couponId, {
+      code: code ? code.trim().toUpperCase() : undefined,
+      discountAmount: discountAmount !== undefined ? parseFloat(discountAmount) || 0 : undefined,
+      minPurchase: minPurchase !== undefined ? parseFloat(minPurchase) || 0 : undefined,
+      expiryDate: expiryDate !== undefined ? expiryDate : undefined,
+      targetProducts: targetProducts || [],
+      targetCategories: targetCategories || []
+    });
+
+    if (!updated) {
+      return res.status(404).json({ error: "Cupom não encontrado." });
+    }
+
+    db.addLog(user.id, user.name, "Edição de Cupom", `Cupom "${updated.code}" atualizado.`);
+    res.json(updated);
+  });
+
+  app.delete("/api/coupons/:id", (req, res) => {
+    const user = getSessionUser(req);
+    if (!user || user.role !== UserRole.ADMIN) {
+      return res.status(403).json({ error: "Não autorizado." });
+    }
+    const couponId = req.params.id;
+    const coupon = db.getCoupons().find(c => c.id === couponId);
+    if (coupon) {
+      db.deleteCoupon(couponId);
+      db.addLog(user.id, user.name, "Exclusão de Cupom", `Cupom "${coupon.code}" excluído.`);
+    }
+    res.json({ success: true });
+  });
+
   // Logs
   app.get("/api/logs", (req, res) => {
     const user = getSessionUser(req);

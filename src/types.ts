@@ -102,6 +102,8 @@ export interface Coupon {
   discountAmount: number;
   minPurchase: number;
   expiryDate: string;
+  targetProducts?: string[];
+  targetCategories?: string[];
 }
 
 export interface AdminLog {

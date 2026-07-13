@@ -166,7 +166,26 @@ export const api = {
   // Orders
   getOrders: async (): Promise<Order[]> => {
     const res = await fetch("/api/orders", { headers: getHeaders() });
-    return res.json();
+    if (!res.ok) {
+      const text = await res.text();
+      if (text.includes("Rate exceeded") || res.status === 429) {
+        throw new Error("Rate exceeded");
+      }
+      throw new Error(text || "Erro ao buscar pedidos");
+    }
+    const contentType = res.headers.get("content-type");
+    if (contentType && !contentType.includes("application/json")) {
+      const text = await res.text();
+      if (text.includes("Rate exceeded")) {
+        throw new Error("Rate exceeded");
+      }
+      throw new Error("Resposta inválida do servidor");
+    }
+    try {
+      return await res.json();
+    } catch (e: any) {
+      throw new Error("Erro ao decodificar JSON dos pedidos");
+    }
   },
 
   createOrder: async (order: Partial<Order>): Promise<Order> => {
@@ -192,6 +211,34 @@ export const api = {
   getCoupons: async (): Promise<Coupon[]> => {
     const res = await fetch("/api/coupons");
     return res.json();
+  },
+
+  createCoupon: async (coupon: Partial<Coupon>): Promise<Coupon> => {
+    const res = await fetch("/api/coupons", {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(coupon)
+    });
+    if (!res.ok) throw new Error("Erro ao criar cupom");
+    return res.json();
+  },
+
+  updateCoupon: async (id: string, coupon: Partial<Coupon>): Promise<Coupon> => {
+    const res = await fetch(`/api/coupons/${id}`, {
+      method: "PUT",
+      headers: getHeaders(),
+      body: JSON.stringify(coupon)
+    });
+    if (!res.ok) throw new Error("Erro ao atualizar cupom");
+    return res.json();
+  },
+
+  deleteCoupon: async (id: string): Promise<void> => {
+    const res = await fetch(`/api/coupons/${id}`, {
+      method: "DELETE",
+      headers: getHeaders()
+    });
+    if (!res.ok) throw new Error("Erro ao excluir cupom");
   },
 
   // Logs

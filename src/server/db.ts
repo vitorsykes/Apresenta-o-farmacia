@@ -445,6 +445,24 @@ export class JSONDatabase {
   }
 
   public getCoupons() { return this.data.coupons; }
+  public addCoupon(coupon: Coupon) {
+    this.data.coupons.push(coupon);
+    this.save();
+    return coupon;
+  }
+  public updateCoupon(id: string, updated: Partial<Coupon>) {
+    const idx = this.data.coupons.findIndex(c => c.id === id);
+    if (idx !== -1) {
+      this.data.coupons[idx] = { ...this.data.coupons[idx], ...updated };
+      this.save();
+      return this.data.coupons[idx];
+    }
+    return null;
+  }
+  public deleteCoupon(id: string) {
+    this.data.coupons = this.data.coupons.filter(c => c.id !== id);
+    this.save();
+  }
 
   public getLogs() { return this.data.logs; }
   public addLog(adminId: string, adminName: string, action: string, details: string) {

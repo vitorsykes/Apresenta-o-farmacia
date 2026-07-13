@@ -195,14 +195,18 @@ export default function App() {
         }
 
         prevOrdersRef.current = currentOrders;
-      } catch (err) {
-        console.error("Erro ao buscar atualizações de pedidos", err);
+      } catch (err: any) {
+        if (err?.message === "Rate exceeded") {
+          console.warn("Monitoramento de pedidos pausado temporariamente: limite de requisições excedido.");
+        } else {
+          console.error("Erro ao buscar atualizações de pedidos", err);
+        }
       }
     };
 
-    // Run immediately and then every 3 seconds for extremely responsive feel
+    // Run immediately and then every 25 seconds for a responsive yet rate-safe feel
     pollOrders();
-    const intervalId = setInterval(pollOrders, 3000);
+    const intervalId = setInterval(pollOrders, 25000);
 
     return () => clearInterval(intervalId);
   }, [user]);

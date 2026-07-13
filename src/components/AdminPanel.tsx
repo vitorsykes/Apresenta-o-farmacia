@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { User, Product, Category, Promotion, Flyer, Order, AdminLog, DashboardStats } from "../types.js";
+import { User, Product, Category, Promotion, Flyer, Order, AdminLog, DashboardStats, Coupon } from "../types.js";
 import { api } from "../lib/api.js";
 import { 
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
@@ -7,7 +7,7 @@ import {
 } from "recharts";
 import { 
   LayoutDashboard, ShoppingBag, FolderTree, Tag, ClipboardList, Plus, Edit2, Trash2, 
-  Search, ShieldAlert, Check, RefreshCw, Layers, Sparkles, Loader2, Save 
+  Search, ShieldAlert, Check, RefreshCw, Layers, Sparkles, Loader2, Save, Ticket 
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -16,7 +16,7 @@ interface AdminPanelProps {
   onNavigateBack: () => void;
 }
 
-type AdminTab = "dashboard" | "products" | "categories" | "promotions" | "orders" | "logs";
+type AdminTab = "dashboard" | "products" | "categories" | "promotions" | "orders" | "logs" | "coupons";
 
 export default function AdminPanel({ adminUser, onNavigateBack }: AdminPanelProps) {
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
@@ -29,6 +29,7 @@ export default function AdminPanel({ adminUser, onNavigateBack }: AdminPanelProp
   const [flyers, setFlyers] = useState<Flyer[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [logs, setLogs] = useState<AdminLog[]>([]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
 
   // Search/Filter states
   const [prodSearch, setProdSearch] = useState("");
@@ -74,6 +75,16 @@ export default function AdminPanel({ adminUser, onNavigateBack }: AdminPanelProp
   const [flyerStart, setFlyerStart] = useState("");
   const [flyerEnd, setFlyerEnd] = useState("");
 
+  // Form states: Coupon
+  const [editCoupon, setEditCoupon] = useState<Coupon | null>(null);
+  const [newCouponCode, setNewCouponCode] = useState("");
+  const [newCouponDiscount, setNewCouponDiscount] = useState("");
+  const [newCouponMinPurchase, setNewCouponMinPurchase] = useState("");
+  const [newCouponExpiry, setNewCouponExpiry] = useState("");
+  const [couponTargetType, setCouponTargetType] = useState<"all" | "products" | "categories">("all");
+  const [couponSelectedProducts, setCouponSelectedProducts] = useState<string[]>([]);
+  const [couponSelectedCategories, setCouponSelectedCategories] = useState<string[]>([]);
+
   // Stats reset states
   const [resetting, setResetting] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -103,7 +114,8 @@ export default function AdminPanel({ adminUser, onNavigateBack }: AdminPanelProp
         promosList,
         flysList,
         ordersList,
-        logsList
+        logsList,
+        couponsList
       ] = await Promise.all([
         api.getStats(),
         api.getProducts(),
@@ -111,7 +123,8 @@ export default function AdminPanel({ adminUser, onNavigateBack }: AdminPanelProp
         api.getPromotions(),
         api.getFlyers(),
         api.getOrders(),
-        api.getLogs()
+        api.getLogs(),
+        api.getCoupons()
       ]);
 
       setStats(dashboardStats);
@@ -121,6 +134,7 @@ export default function AdminPanel({ adminUser, onNavigateBack }: AdminPanelProp
       setFlyers(flysList);
       setOrders(ordersList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
       setLogs(logsList);
+      setCoupons(couponsList);
     } catch (err) {
       console.error("Erro ao carregar dados administrativos", err);
     } finally {
@@ -329,6 +343,85 @@ export default function AdminPanel({ adminUser, onNavigateBack }: AdminPanelProp
     }
   };
 
+  // Coupon Actions
+  const handleAddCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCouponCode.trim() || !newCouponDiscount) return;
+
+    const payload: Partial<Coupon> = {
+      code: newCouponCode.trim().toUpperCase(),
+      discountAmount: parseFloat(newCouponDiscount) || 0,
+      minPurchase: parseFloat(newCouponMinPurchase) || 0,
+      expiryDate: newCouponExpiry || new Date().toISOString().split("T")[0],
+      targetProducts: couponTargetType === "products" ? couponSelectedProducts : [],
+      targetCategories: couponTargetType === "categories" ? couponSelectedCategories : []
+    };
+
+    try {
+      if (editCoupon) {
+        await api.updateCoupon(editCoupon.id, payload);
+      } else {
+        await api.createCoupon(payload);
+      }
+      setEditCoupon(null);
+      setNewCouponCode("");
+      setNewCouponDiscount("");
+      setNewCouponMinPurchase("");
+      setNewCouponExpiry("");
+      setCouponTargetType("all");
+      setCouponSelectedProducts([]);
+      setCouponSelectedCategories([]);
+      loadAdminData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleEditCouponTrigger = (coupon: Coupon) => {
+    setEditCoupon(coupon);
+    setNewCouponCode(coupon.code);
+    setNewCouponDiscount(coupon.discountAmount.toString());
+    setNewCouponMinPurchase(coupon.minPurchase ? coupon.minPurchase.toString() : "");
+    setNewCouponExpiry(coupon.expiryDate || "");
+    if (coupon.targetProducts && coupon.targetProducts.length > 0) {
+      setCouponTargetType("products");
+      setCouponSelectedProducts(coupon.targetProducts);
+      setCouponSelectedCategories([]);
+    } else if (coupon.targetCategories && coupon.targetCategories.length > 0) {
+      setCouponTargetType("categories");
+      setCouponSelectedCategories(coupon.targetCategories);
+      setCouponSelectedProducts([]);
+    } else {
+      setCouponTargetType("all");
+      setCouponSelectedProducts([]);
+      setCouponSelectedCategories([]);
+    }
+  };
+
+  const handleCancelEditCoupon = () => {
+    setEditCoupon(null);
+    setNewCouponCode("");
+    setNewCouponDiscount("");
+    setNewCouponMinPurchase("");
+    setNewCouponExpiry("");
+    setCouponTargetType("all");
+    setCouponSelectedProducts([]);
+    setCouponSelectedCategories([]);
+  };
+
+  const handleDeleteCoupon = async (id: string) => {
+    if (!confirm("Tem certeza que deseja excluir este cupom?")) return;
+    try {
+      await api.deleteCoupon(id);
+      if (editCoupon && editCoupon.id === id) {
+        handleCancelEditCoupon();
+      }
+      loadAdminData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // Order Actions
   const handleUpdateStatus = async (id: string, currentStatus: Order["status"]) => {
     let nextStatus: Order["status"] = "Em Rota";
@@ -444,6 +537,15 @@ export default function AdminPanel({ adminUser, onNavigateBack }: AdminPanelProp
             }`}
           >
             <Tag className="w-4 h-4" /> Campanhas e Encartes
+          </button>
+
+          <button 
+            onClick={() => setActiveTab("coupons")}
+            className={`flex items-center gap-2.5 px-4 py-3 rounded-xl font-bold text-xs transition-all w-full text-left cursor-pointer ${
+              activeTab === "coupons" ? "bg-[#d5e3ff] text-[#003e7a]" : "bg-white hover:bg-[#efeded] text-[#727783]"
+            }`}
+          >
+            <Ticket className="w-4 h-4" /> Cupons de Desconto
           </button>
 
           <button 
@@ -955,6 +1057,263 @@ export default function AdminPanel({ adminUser, onNavigateBack }: AdminPanelProp
                         </span>
                       </div>
                     ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Coupons tab */}
+              {activeTab === "coupons" && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="space-y-6"
+                >
+                  <div className="bg-white p-6 rounded-xl border border-[#c2c6d3]/40 shadow-xs">
+                    <h3 className="text-base font-bold text-[#1b1c1c] mb-1 flex items-center gap-2">
+                      <Ticket className="w-5 h-5 text-[#003e7a]" />
+                      {editCoupon ? "Editar Cupom de Desconto" : "Criar Novo Cupom de Desconto"}
+                    </h3>
+                    <p className="text-[11px] text-[#727783] mb-4">
+                      {editCoupon ? `Modifique as configurações do cupom "${editCoupon.code}" abaixo.` : "Adicione novos códigos de cupons para uso na finalização de compras."}
+                    </p>
+                    
+                    <form onSubmit={handleAddCoupon} className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-[#424751]">Código do Cupom</label>
+                        <input 
+                          type="text"
+                          required
+                          placeholder="Ex: PROMO20"
+                          className="rounded-lg border bg-white px-3 py-2 text-xs focus:border-[#003e7a] outline-none uppercase font-bold" 
+                          value={newCouponCode}
+                          onChange={(e) => setNewCouponCode(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-[#424751]">Valor de Desconto (R$)</label>
+                        <input 
+                          type="number"
+                          required
+                          min="1"
+                          step="0.01"
+                          placeholder="Ex: 20.00"
+                          className="rounded-lg border bg-white px-3 py-2 text-xs focus:border-[#003e7a] outline-none" 
+                          value={newCouponDiscount}
+                          onChange={(e) => setNewCouponDiscount(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-[#424751]">Compra Mínima (R$)</label>
+                        <input 
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="Ex: 100.00"
+                          className="rounded-lg border bg-white px-3 py-2 text-xs focus:border-[#003e7a] outline-none" 
+                          value={newCouponMinPurchase}
+                          onChange={(e) => setNewCouponMinPurchase(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-[#424751]">Data de Validade</label>
+                        <input 
+                          type="date"
+                          required
+                          className="rounded-lg border bg-white px-3 py-2 text-xs focus:border-[#003e7a] outline-none" 
+                          value={newCouponExpiry}
+                          onChange={(e) => setNewCouponExpiry(e.target.value)}
+                        />
+                      </div>
+
+                      {/* Targeted applicability options */}
+                      <div className="sm:col-span-4 mt-2 border-t border-[#c2c6d3]/30 pt-3">
+                        <label className="text-xs font-extrabold text-[#1b1c1c] block mb-2">Restrição de Aplicabilidade</label>
+                        <div className="flex flex-wrap gap-4 mb-3">
+                          <label className="flex items-center gap-1.5 text-xs text-[#424751] font-semibold cursor-pointer">
+                            <input 
+                              type="radio" 
+                              name="couponTargetType" 
+                              checked={couponTargetType === "all"} 
+                              onChange={() => setCouponTargetType("all")} 
+                              className="text-[#003e7a]"
+                            />
+                            Todo o Site
+                          </label>
+                          <label className="flex items-center gap-1.5 text-xs text-[#424751] font-semibold cursor-pointer">
+                            <input 
+                              type="radio" 
+                              name="couponTargetType" 
+                              checked={couponTargetType === "categories"} 
+                              onChange={() => setCouponTargetType("categories")} 
+                              className="text-[#003e7a]"
+                            />
+                            Categorias Específicas
+                          </label>
+                          <label className="flex items-center gap-1.5 text-xs text-[#424751] font-semibold cursor-pointer">
+                            <input 
+                              type="radio" 
+                              name="couponTargetType" 
+                              checked={couponTargetType === "products"} 
+                              onChange={() => setCouponTargetType("products")} 
+                              className="text-[#003e7a]"
+                            />
+                            Produtos Específicos
+                          </label>
+                        </div>
+
+                        {/* Categories sub-form */}
+                        {couponTargetType === "categories" && (
+                          <div className="bg-[#fbf9f8] p-3 rounded-lg border border-[#c2c6d3]/40 max-h-40 overflow-y-auto space-y-1.5">
+                            <p className="text-[10px] font-bold text-[#727783] mb-1 uppercase tracking-wider">Selecione as categorias aplicáveis:</p>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {categories.map(cat => {
+                                const checked = couponSelectedCategories.includes(cat.name);
+                                return (
+                                  <label key={cat.id} className="flex items-center gap-2 text-xs font-medium text-[#424751] cursor-pointer">
+                                    <input 
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => {
+                                        if (checked) {
+                                          setCouponSelectedCategories(couponSelectedCategories.filter(c => c !== cat.name));
+                                        } else {
+                                          setCouponSelectedCategories([...couponSelectedCategories, cat.name]);
+                                        }
+                                      }}
+                                      className="rounded text-[#003e7a]"
+                                    />
+                                    {cat.name}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Products sub-form */}
+                        {couponTargetType === "products" && (
+                          <div className="bg-[#fbf9f8] p-3 rounded-lg border border-[#c2c6d3]/40 max-h-52 overflow-y-auto space-y-1.5">
+                            <p className="text-[10px] font-bold text-[#727783] mb-1 uppercase tracking-wider">Selecione os produtos aplicáveis:</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {products.map(prod => {
+                                const checked = couponSelectedProducts.includes(prod.id);
+                                return (
+                                  <label key={prod.id} className="flex items-center gap-2 text-xs font-medium text-[#424751] cursor-pointer truncate" title={prod.name}>
+                                    <input 
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => {
+                                        if (checked) {
+                                          setCouponSelectedProducts(couponSelectedProducts.filter(id => id !== prod.id));
+                                        } else {
+                                          setCouponSelectedProducts([...couponSelectedProducts, prod.id]);
+                                        }
+                                      }}
+                                      className="rounded text-[#003e7a]"
+                                    />
+                                    <span className="truncate">{prod.name} (R$ {prod.price.toFixed(2)})</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="sm:col-span-4 flex justify-end gap-2 mt-2">
+                        {editCoupon && (
+                          <button 
+                            type="button"
+                            onClick={handleCancelEditCoupon}
+                            className="bg-[#efeded] hover:bg-[#e1e0e0] text-[#727783] font-bold text-xs px-4 py-2 rounded-xl transition-colors cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                        )}
+                        <button 
+                          type="submit"
+                          className="bg-[#003e7a] hover:bg-[#002850] text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                        >
+                          {editCoupon ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                          {editCoupon ? "Salvar Alterações" : "Adicionar Cupom"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+
+                  <div className="bg-white rounded-xl border border-[#c2c6d3]/40 overflow-hidden shadow-xs">
+                    <div className="bg-[#fbf9f8] px-4 py-3 border-b border-[#c2c6d3]/40 flex justify-between items-center">
+                      <h4 className="text-xs font-extrabold uppercase tracking-wider text-[#424751]">Cupons Ativos ({coupons.length})</h4>
+                    </div>
+
+                    {coupons.length === 0 ? (
+                      <div className="p-8 text-center text-[#727783] text-xs font-medium">
+                        Nenhum cupom de desconto cadastrado.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-[#c2c6d3]/40">
+                        {coupons.map((coupon) => (
+                          <div key={coupon.id} className="p-4 flex justify-between items-center hover:bg-[#fbf9f8]/30 transition-colors">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="bg-[#d5e3ff] text-[#003e7a] text-xs font-extrabold px-2.5 py-0.5 rounded-lg border border-[#a8c8ff]">
+                                  {coupon.code}
+                                </span>
+                                <span className="text-xs font-bold text-[#006d38]">
+                                  Desconto: R$ {coupon.discountAmount.toFixed(2)}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[#727783]">
+                                <p>Compra Mínima: <span className="font-semibold text-[#1b1c1c]">R$ {coupon.minPurchase ? coupon.minPurchase.toFixed(2) : "Sem mínimo"}</span></p>
+                                <p>Validade: <span className="font-semibold text-[#1b1c1c]">{coupon.expiryDate ? new Date(coupon.expiryDate).toLocaleDateString("pt-BR") : "Indeterminada"}</span></p>
+                              </div>
+
+                              {coupon.targetCategories && coupon.targetCategories.length > 0 && (
+                                <p className="text-[11px] text-[#003e7a] font-medium">
+                                  Aplicável às categorias: <span className="text-[#1b1c1c] font-semibold">{coupon.targetCategories.join(", ")}</span>
+                                </p>
+                              )}
+
+                              {coupon.targetProducts && coupon.targetProducts.length > 0 && (
+                                <p className="text-[11px] text-[#003e7a] font-medium">
+                                  Aplicável a <span className="text-[#1b1c1c] font-semibold">{coupon.targetProducts.length} produto(s) específico(s)</span>:{" "}
+                                  <span className="text-[#727783] text-[10px]">
+                                    {coupon.targetProducts.map(id => products.find(p => p.id === id)?.name || id).join(", ")}
+                                  </span>
+                                </p>
+                              )}
+
+                              {(!coupon.targetCategories || coupon.targetCategories.length === 0) && (!coupon.targetProducts || coupon.targetProducts.length === 0) && (
+                                <p className="text-[11px] text-[#555] font-medium">
+                                  Aplicável a: <span className="text-gray-600">Todo o site</span>
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button 
+                                onClick={() => handleEditCouponTrigger(coupon)}
+                                className="text-[#003e7a] hover:bg-[#d5e3ff] p-2 rounded-lg transition-colors border border-transparent hover:border-[#a8c8ff] cursor-pointer"
+                                title="Editar Cupom"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteCoupon(coupon.id)}
+                                className="text-[#ba1a1a] hover:bg-[#ffdad6] p-2 rounded-lg transition-colors border border-transparent hover:border-[#ffb4ab] cursor-pointer"
+                                title="Excluir Cupom"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}

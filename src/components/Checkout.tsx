@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Product, Order, User } from "../types.js";
+import { Product, Order, User, Coupon } from "../types.js";
 import { api } from "../lib/api.js";
-import { ArrowLeft, CreditCard, QrCode, FileText, CheckCircle, ShieldCheck, Loader2, Copy, Check, Banknote } from "lucide-react";
+import { ArrowLeft, CreditCard, QrCode, FileText, CheckCircle, ShieldCheck, Loader2, Copy, Check, Banknote, Ticket } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 interface CheckoutProps {
@@ -42,6 +42,17 @@ export default function Checkout({
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Coupon states
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [couponError, setCouponError] = useState("");
+  const [couponSuccessMsg, setCouponSuccessMsg] = useState("");
+
+  useEffect(() => {
+    api.getCoupons().then(setCoupons).catch(err => console.error("Erro ao buscar cupons:", err));
+  }, []);
+
   // calculate totals
   const mappedItems = cartItems.map((item) => {
     const prod = products.find((p) => p.id === item.productId);
@@ -55,9 +66,86 @@ export default function Checkout({
   }).filter((x) => x.name !== "");
 
   const subtotal = mappedItems.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
-  const discount = subtotal > 100 ? 10.00 : 0.00; // automatic promo coupon VITALIDADE10 if > 100
+
+  // Dynamic scoped coupon calculation
+  let discount = 0;
+  let activeCouponLabel = "";
+
+  if (appliedCoupon) {
+    const applicableSubtotal = mappedItems.reduce((acc, curr) => {
+      const prod = products.find(p => p.id === curr.productId);
+      const isProductAllowed = !appliedCoupon.targetProducts || appliedCoupon.targetProducts.length === 0 || appliedCoupon.targetProducts.includes(curr.productId);
+      const isCategoryAllowed = !appliedCoupon.targetCategories || appliedCoupon.targetCategories.length === 0 || (prod && appliedCoupon.targetCategories.includes(prod.category));
+      
+      if (isProductAllowed && isCategoryAllowed) {
+        return acc + (curr.price * curr.quantity);
+      }
+      return acc;
+    }, 0);
+
+    discount = Math.min(appliedCoupon.discountAmount, applicableSubtotal);
+    activeCouponLabel = appliedCoupon.code;
+  } else {
+    // default auto discount
+    discount = subtotal > 100 ? 10.00 : 0.00;
+    activeCouponLabel = "VITALIDADE10";
+  }
+
   const freight = deliveryType === "Expressa" ? 14.90 : 7.90;
-  const total = subtotal - discount + freight;
+  const total = Math.max(0, subtotal - discount) + freight;
+
+  const handleApplyCoupon = () => {
+    setCouponError("");
+    setCouponSuccessMsg("");
+    
+    if (!couponInput.trim()) {
+      setAppliedCoupon(null);
+      return;
+    }
+
+    const code = couponInput.trim().toUpperCase();
+    const found = coupons.find(c => c.code === code);
+    
+    if (!found) {
+      setCouponError("Cupom inválido ou não encontrado.");
+      setAppliedCoupon(null);
+      return;
+    }
+
+    // Check expiration
+    if (found.expiryDate) {
+      const today = new Date().toISOString().split("T")[0];
+      if (today > found.expiryDate) {
+        setCouponError("Este cupom já está expirado.");
+        setAppliedCoupon(null);
+        return;
+      }
+    }
+
+    // Check minimum purchase
+    if (found.minPurchase && subtotal < found.minPurchase) {
+      setCouponError(`Este cupom exige uma compra mínima de R$ ${found.minPurchase.toFixed(2)}.`);
+      setAppliedCoupon(null);
+      return;
+    }
+
+    // Check if there are applicable products in cart
+    const applicableItems = mappedItems.filter(curr => {
+      const prod = products.find(p => p.id === curr.productId);
+      const isProductAllowed = !found.targetProducts || found.targetProducts.length === 0 || found.targetProducts.includes(curr.productId);
+      const isCategoryAllowed = !found.targetCategories || found.targetCategories.length === 0 || (prod && found.targetCategories.includes(prod.category));
+      return isProductAllowed && isCategoryAllowed;
+    });
+
+    if (applicableItems.length === 0) {
+      setCouponError("Este cupom não se aplica aos itens no carrinho.");
+      setAppliedCoupon(null);
+      return;
+    }
+
+    setAppliedCoupon(found);
+    setCouponSuccessMsg(`Cupom ${found.code} aplicado com sucesso!`);
+  };
 
   const handleCopyPix = () => {
     navigator.clipboard.writeText("00020126580014BR.GOV.BCB.PIX0136dee57c98-8533-48c8-b1ba-c93fd1cd89f85204000053039865405101.755802BR5918VITALIDADE FARMACIA6009SAO PAULO62070503***6304D1B0");
@@ -378,6 +466,36 @@ export default function Checkout({
               ))}
             </div>
 
+            {/* Cupom de Desconto Section */}
+            <div className="border-t border-[#c2c6d3]/40 pt-3 flex flex-col gap-2">
+              <label className="text-xs font-bold text-[#424751] flex items-center gap-1.5">
+                <Ticket className="w-4 h-4 text-[#003e7a]" />
+                Possui cupom de desconto?
+              </label>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  placeholder="Ex: PROMO20" 
+                  className="flex-1 rounded-lg border border-[#c2c6d3] px-3 py-1.5 text-xs focus:border-[#003e7a] outline-none uppercase font-bold bg-white"
+                  value={couponInput}
+                  onChange={(e) => setCouponInput(e.target.value)}
+                />
+                <button 
+                  type="button"
+                  onClick={handleApplyCoupon}
+                  className="bg-[#003e7a] hover:bg-[#002850] text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                >
+                  Aplicar
+                </button>
+              </div>
+              {couponError && (
+                <p className="text-[10px] text-[#ba1a1a] font-bold">{couponError}</p>
+              )}
+              {couponSuccessMsg && (
+                <p className="text-[10px] text-[#006d38] font-bold">{couponSuccessMsg}</p>
+              )}
+            </div>
+
             {/* Recalculate totals view */}
             <div className="border-t border-[#c2c6d3]/40 pt-3 space-y-2 text-xs md:text-sm text-[#424751]">
               <div className="flex justify-between">
@@ -386,7 +504,7 @@ export default function Checkout({
               </div>
               {discount > 0 && (
                 <div className="flex justify-between text-[#00723a] font-semibold">
-                  <span>Desconto (VITALIDADE10)</span>
+                  <span>Desconto ({activeCouponLabel})</span>
                   <span>- R$ {discount.toFixed(2)}</span>
                 </div>
               )}
