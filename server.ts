@@ -2,8 +2,8 @@ import express from "express";
 import path from "path";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
-import { db } from "./src/server/db";
-import { UserRole } from "./src/types";
+import { db } from "./src/server/db.js";
+import { UserRole } from "./src/types.js";
 import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
