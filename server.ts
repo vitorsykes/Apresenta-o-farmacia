@@ -10,17 +10,24 @@ dotenv.config();
 
 // Initialize Supabase safely
 let supabase: ReturnType<typeof createClient> | null = null;
-const supabaseUrl = process.env.SUPABASE_URL || "https://eygunisvclakxyetlwsf.supabase.co";
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "sb_publishable_i7b_hzFbK5Smwilj1aVFMA_nez4VSDm";
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://eygunisvclakxyetlwsf.supabase.co";
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_i7b_hzFbK5Smwilj1aVFMA_nez4VSDm";
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
 if (supabaseUrl && (supabaseServiceKey || supabaseAnonKey)) {
-  supabase = createClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  });
+  try {
+    supabase = createClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+    console.log("Supabase client initialized successfully with URL:", supabaseUrl);
+  } catch (err: any) {
+    console.error("Erro ao inicializar o cliente do Supabase:", err.message);
+  }
+} else {
+  console.warn("Supabase credentials not fully provided. Running in fallback mode.");
 }
 
 const isProd = process.env.NODE_ENV === "production";
@@ -28,19 +35,23 @@ const PORT = 3000;
 
 // Initialize Gemini safely
 let ai: GoogleGenAI | null = null;
-if (process.env.GEMINI_API_KEY) {
+const geminiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+if (geminiKey) {
   try {
     ai = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
+      apiKey: geminiKey,
       httpOptions: {
         headers: {
           "User-Agent": "aistudio-build",
         },
       },
     });
+    console.log("Gemini SDK initialized successfully.");
   } catch (err) {
     console.error("Erro ao inicializar o SDK do Gemini", err);
   }
+} else {
+  console.warn("Gemini API Key not found. Smart search features will be limited.");
 }
 
 const app = express();
