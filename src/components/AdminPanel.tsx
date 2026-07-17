@@ -543,7 +543,7 @@ export default function AdminPanel({ storeSettings, onSettingsUpdate, adminUser,
         <div className="flex items-center gap-2">
           <Layers className="w-6 h-6 text-[#74f9a0]" />
           <div>
-            <h1 className="font-extrabold text-sm md:text-base leading-none">Vitalidade Farmácia</h1>
+            <h1 className="font-extrabold text-sm md:text-base leading-none">{storeSettings.name}</h1>
             <p className="text-[10px] text-[#a8c8ff] font-bold mt-0.5">Painel Administrativo Protegido</p>
           </div>
         </div>

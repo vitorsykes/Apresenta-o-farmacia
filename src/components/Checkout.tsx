@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { Product, Order, User, Coupon } from "../types.js";
+import { Product, Order, User, Coupon, StoreSettings } from "../types.js";
 import { api } from "../lib/api.js";
 import { ArrowLeft, CreditCard, QrCode, FileText, CheckCircle, ShieldCheck, Loader2, Copy, Check, Banknote, Ticket } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 interface CheckoutProps {
+  storeSettings: StoreSettings;
   user: User;
   cartItems: { productId: string; quantity: number }[];
   products: Product[];
@@ -13,6 +14,7 @@ interface CheckoutProps {
 }
 
 export default function Checkout({
+  storeSettings,
   user,
   cartItems,
   products,
@@ -88,7 +90,8 @@ export default function Checkout({
   } else {
     // default auto discount
     discount = subtotal > 100 ? 10.00 : 0.00;
-    activeCouponLabel = "VITALIDADE10";
+    const codePrefix = storeSettings.name.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 10);
+    activeCouponLabel = `${codePrefix}10`;
   }
 
   const freight = deliveryType === "Expressa" ? 14.90 : 7.90;
@@ -148,7 +151,10 @@ export default function Checkout({
   };
 
   const handleCopyPix = () => {
-    navigator.clipboard.writeText("00020126580014BR.GOV.BCB.PIX0136dee57c98-8533-48c8-b1ba-c93fd1cd89f85204000053039865405101.755802BR5918VITALIDADE FARMACIA6009SAO PAULO62070503***6304D1B0");
+    const cleanName = storeSettings.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9 ]/g, "").substring(0, 25);
+    const nameLengthStr = cleanName.length.toString().padStart(2, '0');
+    const pixString = `00020126580014BR.GOV.BCB.PIX0136dee57c98-8533-48c8-b1ba-c93fd1cd89f85204000053039865405101.755802BR59${nameLengthStr}${cleanName}6009SAO PAULO62070503***6304D1B0`;
+    navigator.clipboard.writeText(pixString);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -191,7 +197,7 @@ export default function Checkout({
           }
         }
 
-        const msg = `🛒 *NOVO PEDIDO - VITALIDADE FARMÁCIA*\n\n` +
+        const msg = `🛒 *NOVO PEDIDO - ${storeSettings.name.toUpperCase()}*\n\n` +
           `*Código do Pedido:* #${order.id}\n` +
           `*Cliente:* ${user.name} (${user.email})\n\n` +
           `📍 *Endereço de Entrega:*\n` +
