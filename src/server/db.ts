@@ -13,8 +13,12 @@ import {
   UserRole 
 } from "../types.js";
 
-const DB_DIR = path.join(process.cwd(), "data");
-const DB_FILE = path.join(DB_DIR, "db.json");
+const isVercel = process.env.VERCEL === "1" || !!process.env.NOW_REGION;
+const LOCAL_DB_DIR = path.join(process.cwd(), "data");
+const LOCAL_DB_FILE = path.join(LOCAL_DB_DIR, "db.json");
+
+const DB_DIR = isVercel ? "/tmp" : LOCAL_DB_DIR;
+const DB_FILE = isVercel ? "/tmp/db.json" : LOCAL_DB_FILE;
 
 interface DatabaseSchema {
   users: User[];
@@ -297,8 +301,12 @@ export class JSONDatabase {
   }
 
   private load(): DatabaseSchema {
-    if (!fs.existsSync(DB_DIR)) {
-      fs.mkdirSync(DB_DIR, { recursive: true });
+    try {
+      if (!fs.existsSync(DB_DIR)) {
+        fs.mkdirSync(DB_DIR, { recursive: true });
+      }
+    } catch (err) {
+      console.error("Erro ao criar diretório do banco de dados:", err);
     }
 
     if (fs.existsSync(DB_FILE)) {
@@ -307,6 +315,18 @@ export class JSONDatabase {
         return JSON.parse(raw);
       } catch (err) {
         console.error("Erro ao ler banco de dados JSON. Inicializando padrões.", err);
+      }
+    }
+
+    // On Vercel, if the ephemeral /tmp/db.json doesn't exist, we try to load the bundled data/db.json first
+    if (isVercel && fs.existsSync(LOCAL_DB_FILE)) {
+      try {
+        const raw = fs.readFileSync(LOCAL_DB_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        this.save(parsed);
+        return parsed;
+      } catch (err) {
+        console.error("Erro ao ler banco de dados empacotado no Vercel:", err);
       }
     }
 
