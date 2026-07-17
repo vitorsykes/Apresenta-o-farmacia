@@ -36,10 +36,26 @@ export default function App() {
       console.error("Failed to parse store settings from localStorage", e);
     }
     return {
-      name: "Vitalidade Farmácia",
-      logoUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuC6i7zlH0ucNVZqyQTI4kAbRn88Nay0-Xb7uNMDNj4gBGdRRYCZndzvuuDZq_difdf81jjJLBsQZwY8vZH61S28d91z2xvNEH5T9WQfc3Xr1o1Z8qPHEGLswjYnYaMNEs0Il7E8dTkpIQ8TjacNq1SkgxtAeECAdDHZZkJcusluJU7xkUw6R3-kd1BV1NWma9nLv5nASikysOsVscfpQ-L22Sm3iu2Gi8oPuu4bJAfUf8Bq5QluPkB0"
+      name: "Max Alto da Rasa",
+      logoUrl: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgkOVHIm_cqKxJBg70eEMvBry8WjKpEcQncJtZOD9jicleyob3LhhVvG0-q6H9ndEBennryf6v_BjOCYQFS4cjcnKpZT9S4sdIefhb49WOitwG-qG8UcNmW7nuPBU2e_Hyj72OmeRRHETQt0FmayULHC_5MEbl3WdFrp1E-ArfFbkLcgKxI35dtVW8fjfk/s1600/LOGO%202.png"
     };
   });
+
+  // Dynamic tab branding (Title & Favicon)
+  useEffect(() => {
+    if (storeSettings.name) {
+      document.title = storeSettings.name;
+    }
+    if (storeSettings.logoUrl) {
+      let favicon = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+      if (!favicon) {
+        favicon = document.createElement("link");
+        favicon.rel = "icon";
+        document.head.appendChild(favicon);
+      }
+      favicon.href = storeSettings.logoUrl;
+    }
+  }, [storeSettings]);
 
   // Sync store settings with localStorage whenever they change
   useEffect(() => {
@@ -79,8 +95,8 @@ export default function App() {
           api.getStoreSettings().catch(err => {
             console.error("Failed to load store settings", err);
             return {
-              name: "Vitalidade Farmácia",
-              logoUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuC6i7zlH0ucNVZqyQTI4kAbRn88Nay0-Xb7uNMDNj4gBGdRRYCZndzvuuDZq_difdf81jjJLBsQZwY8vZH61S28d91z2xvNEH5T9WQfc3Xr1o1Z8qPHEGLswjYnYaMNEs0Il7E8dTkpIQ8TjacNq1SkgxtAeECAdDHZZkJcusluJU7xkUw6R3-kd1BV1NWma9nLv5nASikysOsVscfpQ-L22Sm3iu2Gi8oPuu4bJAfUf8Bq5QluPkB0"
+              name: "Max Alto da Rasa",
+              logoUrl: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgkOVHIm_cqKxJBg70eEMvBry8WjKpEcQncJtZOD9jicleyob3LhhVvG0-q6H9ndEBennryf6v_BjOCYQFS4cjcnKpZT9S4sdIefhb49WOitwG-qG8UcNmW7nuPBU2e_Hyj72OmeRRHETQt0FmayULHC_5MEbl3WdFrp1E-ArfFbkLcgKxI35dtVW8fjfk/s1600/LOGO%202.png"
             };
           })
         ]);

@@ -61,6 +61,7 @@ export default function Login({ storeSettings, onLoginSuccess }: LoginProps) {
         callback: handleGoogleCredentialResponse,
         auto_select: false,
         cancel_on_tap_outside: true,
+        use_fedcm: false,
       });
       renderGoogleButton();
     } catch (err) {
