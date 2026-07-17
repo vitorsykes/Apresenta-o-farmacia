@@ -69,7 +69,7 @@ if (!localAdmin) {
   }
 }
 
-if (supabase) {
+if (supabase && supabaseServiceKey) {
   (async () => {
     try {
       console.log("Ensuring admin@admin.com exists in Supabase Auth...");
@@ -237,17 +237,22 @@ if (supabase) {
       try {
         console.log(`Registering user in Supabase Auth: ${email}`);
         
-        // We attempt to create a pre-confirmed user using Admin Auth API (since we have service role key)
-        // to bypass SMTP email verification constraints, which is perfect for development!
-        const { data: adminData, error: adminError } = await supabase.auth.admin.createUser({
-          email,
-          password,
-          email_confirm: true,
-          user_metadata: { name, whatsapp, address }
-        });
+        let adminData: any = null;
+        let adminError: any = { message: "No service role key provided" };
+
+        if (supabaseServiceKey) {
+          const res = await supabase.auth.admin.createUser({
+            email,
+            password,
+            email_confirm: true,
+            user_metadata: { name, whatsapp, address }
+          });
+          adminData = res.data;
+          adminError = res.error;
+        }
 
         if (adminError) {
-          console.warn("Supabase Auth admin creation failed, falling back to standard signUp:", adminError.message);
+          console.warn("Supabase Auth admin creation failed or skipped, falling back to standard signUp:", adminError?.message || "No service key");
           // Standard signup fallback
           const { data, error } = await supabase.auth.signUp({
             email,
@@ -620,6 +625,13 @@ if (supabase) {
     }
 
     res.json({ success: true });
+  });
+
+  // Profile Retrieve
+  app.get("/api/auth/me", (req, res) => {
+    const user = getSessionUser(req);
+    if (!user) return res.status(401).json({ error: "Não autorizado." });
+    res.json(user);
   });
 
   // Profile Edit

@@ -54,28 +54,9 @@ export default function App() {
 
         const token = localStorage.getItem("vitalidade_token");
         if (token) {
-          // Token matches seed ID or similar
-          const users = [
-            {
-              id: "user-client-1",
-              email: "joao.silva@exemplo.com.br",
-              name: "João da Silva",
-              role: "Cliente" as any,
-              avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuCOTJF9BDj3cbHUIo5z425NXtv-6jab9X0me8Cg7SvnJxaecC3g2nFEs_AyTfy_5OX6dIFCs5rfi-46cR21-QpH0fXw8wTOW9Ylvt4L5YpZOrAL5S1hftzg2X_S7XkTE9gmetub5hgpVHAGJbm1HFmydP2SaMvMTBJPQd56l3ywx8Iqm_tioBOcgIxUGfbY69HELEDGqVVG7R7-YKBz4TT1uLL0MNlhUZtsTrDOHpCoqpGI9dPIH23a",
-              ordersCount: 12,
-              couponsCount: 3
-            },
-            {
-              id: "user-admin-1",
-              email: "admin@vitalidade.com.br",
-              name: "Admin Central",
-              role: "Administrador" as any,
-              avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuCbGxXPKa2qwX32b7l-H4YFSp9nLbNhyU57wKvvGI-9MM3MzHjYvpdjPNPbmV5jtvr3TmJRVqo8QV0RwUS0fBM_aWsz60wRbqTA2EySgLxSVB2eZWDVsOyXKr6Dvjt0r3vNd43Y4Dem2CyDuzBZiuVztGMZS8gXbx2FT8oFiU9klCdOnmcLRujSCx2bHgyIeGl9wPXicycxe9PR0cmz4pWCKqwIoWvbuupiAC7WAag387MuCIj-WjIp"
-            }
-          ];
-          const matchedUser = users.find(u => u.id === token);
-          if (matchedUser) {
-            setUser(matchedUser);
+          try {
+            const currentUser = await api.getMe();
+            setUser(currentUser);
             // Load cart and favorites
             const [userCart, userFavs] = await Promise.all([
               api.getCart(),
@@ -83,6 +64,9 @@ export default function App() {
             ]);
             setCart(userCart);
             setFavorites(userFavs);
+          } catch (profileErr) {
+            console.warn("Sessão inválida ou expirada, limpando token...", profileErr);
+            localStorage.removeItem("vitalidade_token");
           }
         }
       } catch (err) {

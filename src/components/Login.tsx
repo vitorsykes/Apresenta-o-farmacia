@@ -63,10 +63,20 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     }
   };
 
-  const handleGoogleLogin = () => {
+  const handleGoogleLogin = async () => {
     setError(null);
     setSuccessMsg(null);
-    setShowGooglePrompt(true);
+    setLoading(true);
+    try {
+      // Tenta fazer login diretamente com o e-mail padrão do Google, caso o usuário já esteja cadastrado.
+      const response = await api.login(googleEmail, undefined, "google-mock-token");
+      onLoginSuccess(response.user);
+    } catch (err: any) {
+      // Se não estiver cadastrado (retorna erro que WhatsApp é obrigatório), mostra o prompt para preencher WhatsApp e Nome.
+      setShowGooglePrompt(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGoogleSubmit = async (e: React.FormEvent) => {

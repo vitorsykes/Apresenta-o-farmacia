@@ -43,6 +43,14 @@ export const api = {
     return data;
   },
 
+  getMe: async (): Promise<User> => {
+    const res = await fetch("/api/auth/me", {
+      headers: getHeaders()
+    });
+    if (!res.ok) throw new Error("Sessão expirada");
+    return res.json();
+  },
+
   updateProfile: async (name: string, email: string, whatsapp?: string, address?: string): Promise<User> => {
     const res = await fetch("/api/auth/profile", {
       method: "PUT",
