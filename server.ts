@@ -1,10 +1,9 @@
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
-import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
-import { db } from "./src/server/db.js";
-import { UserRole } from "./src/types.js";
+import { db } from "./src/server/db";
+import { UserRole } from "./src/types";
 import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
@@ -144,13 +143,77 @@ if (supabase && supabaseServiceKey) {
       // Simulating Google login
       // Check if user already exists
       let user = db.getUsers().find(u => u.email === email);
+      
+      // If not in local db memory, try to find/signIn via Supabase
+      if (!user && supabase) {
+        try {
+          const password = email + "_google_pwd_v1";
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password
+          });
+          if (!error && data.user) {
+            console.log(`Found persistent Google user ${email} in Supabase Auth. Restoring local profile...`);
+            user = db.addUser({
+              id: data.user.id,
+              email,
+              name: data.user.user_metadata?.name || email.split("@")[0].replace(".", " "),
+              role: UserRole.CLIENT,
+              avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuCOTJF9BDj3cbHUIo5z425NXtv-6jab9X0me8Cg7SvnJxaecC3g2nFEs_AyTfy_5OX6dIFCs5rfi-46cR21-QpH0fXw8wTOW9Ylvt4L5YpZOrAL5S1hftzg2X_S7XkTE9gmetub5hgpVHAGJbm1HFmydP2SaMvMTBJPQd56l3ywx8Iqm_tioBOcgIxUGfbY69HELEDGqVVG7R7-YKBz4TT1uLL0MNlhUZtsTrDOHpCoqpGI9dPIH23a",
+              ordersCount: 0,
+              couponsCount: 1,
+              whatsapp: data.user.user_metadata?.whatsapp || "",
+              address: data.user.user_metadata?.address || ""
+            });
+          }
+        } catch (e: any) {
+          console.warn("Supabase check for existing Google user failed:", e.message);
+        }
+      }
+
       if (!user) {
         if (!whatsapp) {
           return res.status(400).json({ error: "O número de WhatsApp é obrigatório para cadastro com Google." });
         }
+
+        let supabaseId = "user-google-" + Math.random().toString(36).substr(2, 9);
+        if (supabase) {
+          try {
+            const password = email + "_google_pwd_v1";
+            let adminData: any = null;
+            let adminError: any = { message: "No service role key" };
+
+            if (supabaseServiceKey) {
+              const res = await supabase.auth.admin.createUser({
+                email,
+                password,
+                email_confirm: true,
+                user_metadata: { name: name || email.split("@")[0], whatsapp }
+              });
+              adminData = res.data;
+              adminError = res.error;
+            }
+
+            if (adminError) {
+              const { data, error } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                  data: { name: name || email.split("@")[0], whatsapp }
+                }
+              });
+              if (data.user) supabaseId = data.user.id;
+            } else if (adminData?.user) {
+              supabaseId = adminData.user.id;
+            }
+          } catch (supErr: any) {
+            console.error("Failed to persist Google user in Supabase:", supErr.message);
+          }
+        }
+
         // Create new client user with WhatsApp
         user = db.addUser({
-          id: "user-google-" + Math.random().toString(36).substr(2, 9),
+          id: supabaseId,
           email,
           name: name || email.split("@")[0].replace(".", " "),
           role: UserRole.CLIENT,
@@ -166,6 +229,17 @@ if (supabase && supabaseServiceKey) {
         }
         user.whatsapp = whatsapp;
         db.updateUser(user);
+
+        // Update in Supabase too
+        if (supabase) {
+          try {
+            await supabase.auth.updateUser({
+              data: { whatsapp }
+            });
+          } catch (err) {
+            console.warn("Failed to update user metadata in Supabase:", err);
+          }
+        }
       }
       return res.json({ user, token: user.id });
     }
@@ -628,8 +702,37 @@ if (supabase && supabaseServiceKey) {
   });
 
   // Profile Retrieve
-  app.get("/api/auth/me", (req, res) => {
-    const user = getSessionUser(req);
+  app.get("/api/auth/me", async (req, res) => {
+    let user = getSessionUser(req);
+    
+    // If the server restarted and the user profile is missing from memory but they have a valid token
+    if (!user && supabase && supabaseServiceKey) {
+      const authHeader = req.headers.authorization;
+      if (authHeader) {
+        const token = authHeader.replace("Bearer ", "");
+        try {
+          console.log(`Restoring session for user ID: ${token} from Supabase Auth...`);
+          const { data, error } = await supabase.auth.admin.getUserById(token);
+          if (!error && data?.user) {
+            const su = data.user;
+            user = db.addUser({
+              id: su.id,
+              email: su.email || "",
+              name: su.user_metadata?.name || su.email?.split("@")[0] || "Usuário",
+              role: (su.email === "admin@admin.com" || su.email === "admin@farmacia.com" || su.user_metadata?.role === "admin") ? UserRole.ADMIN : UserRole.CLIENT,
+              avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuDyT29-NQE_libaRCpj1TBdlgoz2ZYG3wx8KJN1FTz8iR0EUyry0crXzKMcXTMyN8ZG3cf5rr3LXivlp8c8tk24F8CMXkkrmHbSZjwAIrdsYQ4pu7noyQgJxrsLJEDpxyYGu2s6ylEMHNrXhZUNH19ca7iogSJsZB6F9BlXEtDVQWiGiavWZrxQC7K6KcCu-dkFe95QBcUaJrKZKddflKYwVUDy1QrhccvKuBX6zouI_pIvWbqlAfPI",
+              ordersCount: 0,
+              couponsCount: 2,
+              whatsapp: su.user_metadata?.whatsapp || "",
+              address: su.user_metadata?.address || ""
+            });
+          }
+        } catch (err: any) {
+          console.error("Failed to restore user from Supabase on /api/auth/me:", err.message);
+        }
+      }
+    }
+
     if (!user) return res.status(401).json({ error: "Não autorizado." });
     res.json(user);
   });
@@ -726,6 +829,7 @@ Ao final, liste os IDs dos produtos recomendados no seguinte formato exato no fi
   if (!isVercel) {
     async function setupAndListen() {
       if (!isProd) {
+        const { createServer: createViteServer } = await import("vite");
         const vite = await createViteServer({
           server: { middlewareMode: true },
           appType: "spa",

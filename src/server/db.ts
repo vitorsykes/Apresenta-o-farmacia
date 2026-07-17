@@ -11,7 +11,7 @@ import {
   AdminLog, 
   DashboardStats,
   UserRole 
-} from "../types.js";
+} from "../types";
 
 const isVercel = process.env.VERCEL === "1" || !!process.env.NOW_REGION;
 const LOCAL_DB_DIR = path.join(process.cwd(), "data");
