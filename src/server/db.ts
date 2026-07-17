@@ -10,7 +10,8 @@ import {
   Coupon, 
   AdminLog, 
   DashboardStats,
-  UserRole 
+  UserRole,
+  StoreSettings
 } from "../types.js";
 
 const isVercel = process.env.VERCEL === "1" || !!process.env.NOW_REGION;
@@ -34,7 +35,13 @@ interface DatabaseSchema {
   cart: { [userId: string]: { productId: string; quantity: number }[] };
   searchHistory: { [userId: string]: { term: string; timestamp: string }[] };
   viewHistory: { [userId: string]: { productId: string; timestamp: string; duration: number }[] };
+  storeSettings?: StoreSettings;
 }
+
+const DEFAULT_STORE_SETTINGS: StoreSettings = {
+  name: "Vitalidade Farmácia",
+  logoUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuC6i7zlH0ucNVZqyQTI4kAbRn88Nay0-Xb7uNMDNj4gBGdRRYCZndzvuuDZq_difdf81jjJLBsQZwY8vZH61S28d91z2xvNEH5T9WQfc3Xr1o1Z8qPHEGLswjYnYaMNEs0Il7E8dTkpIQ8TjacNq1SkgxtAeECAdDHZZkJcusluJU7xkUw6R3-kd1BV1NWma9nLv5nASikysOsVscfpQ-L22Sm3iu2Gi8oPuu4bJAfUf8Bq5QluPkB0"
+};
 
 const DEFAULT_CATEGORIES: Category[] = [
   { id: "cat-1", name: "Medicamentos", sortOrder: 1, icon: "pill", gradientIndex: 1 },
@@ -343,7 +350,8 @@ export class JSONDatabase {
       favorites: { "user-client-1": ["prod-1", "prod-3"] },
       cart: { "user-client-1": [] },
       searchHistory: {},
-      viewHistory: {}
+      viewHistory: {},
+      storeSettings: DEFAULT_STORE_SETTINGS
     };
 
     this.save(initial);
@@ -375,6 +383,20 @@ export class JSONDatabase {
       this.data.users[idx] = { ...this.data.users[idx], ...user };
       this.save();
     }
+  }
+
+  public getStoreSettings(): StoreSettings {
+    if (!this.data.storeSettings) {
+      this.data.storeSettings = { ...DEFAULT_STORE_SETTINGS };
+      this.save();
+    }
+    return this.data.storeSettings;
+  }
+  public updateStoreSettings(settings: Partial<StoreSettings>) {
+    const current = this.getStoreSettings();
+    this.data.storeSettings = { ...current, ...settings };
+    this.save();
+    return this.data.storeSettings;
   }
 
   public getProducts() { return this.data.products; }

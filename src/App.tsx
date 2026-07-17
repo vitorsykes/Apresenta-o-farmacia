@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { User, Product, Order } from "./types.js";
+import { User, Product, Order, StoreSettings } from "./types.js";
 import { api } from "./lib/api.js";
 import Splash from "./components/Splash.js";
 import Login from "./components/Login.js";
@@ -25,6 +25,12 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   
+  // Custom store settings (dynamic branding)
+  const [storeSettings, setStoreSettings] = useState<StoreSettings>({
+    name: "Vitalidade Farmácia",
+    logoUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuC6i7zlH0ucNVZqyQTI4kAbRn88Nay0-Xb7uNMDNj4gBGdRRYCZndzvuuDZq_difdf81jjJLBsQZwY8vZH61S28d91z2xvNEH5T9WQfc3Xr1o1Z8qPHEGLswjYnYaMNEs0Il7E8dTkpIQ8TjacNq1SkgxtAeECAdDHZZkJcusluJU7xkUw6R3-kd1BV1NWma9nLv5nASikysOsVscfpQ-L22Sm3iu2Gi8oPuu4bJAfUf8Bq5QluPkB0"
+  });
+  
   // Cart & Favorites states
   const [cart, setCart] = useState<{ productId: string; quantity: number }[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -49,8 +55,18 @@ export default function App() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        const prods = await api.getProducts();
+        const [prods, settings] = await Promise.all([
+          api.getProducts(),
+          api.getStoreSettings().catch(err => {
+            console.error("Failed to load store settings", err);
+            return {
+              name: "Vitalidade Farmácia",
+              logoUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuC6i7zlH0ucNVZqyQTI4kAbRn88Nay0-Xb7uNMDNj4gBGdRRYCZndzvuuDZq_difdf81jjJLBsQZwY8vZH61S28d91z2xvNEH5T9WQfc3Xr1o1Z8qPHEGLswjYnYaMNEs0Il7E8dTkpIQ8TjacNq1SkgxtAeECAdDHZZkJcusluJU7xkUw6R3-kd1BV1NWma9nLv5nASikysOsVscfpQ-L22Sm3iu2Gi8oPuu4bJAfUf8Bq5QluPkB0"
+            };
+          })
+        ]);
         setProducts(prods);
+        setStoreSettings(settings);
 
         const token = localStorage.getItem("vitalidade_token");
         if (token) {
@@ -115,7 +131,7 @@ export default function App() {
               
               if ("Notification" in window && Notification.permission === "granted") {
                 try {
-                  new Notification("Vitalidade Farmácia - Novo Pedido", {
+                  new Notification(`${storeSettings.name} - Novo Pedido`, {
                     body: `Pedido #${order.id} por ${order.userName || "Cliente"} no total de R$ ${order.total.toFixed(2)}`,
                     tag: `new-order-${order.id}`
                   });
@@ -137,7 +153,7 @@ export default function App() {
                 
                 if ("Notification" in window && Notification.permission === "granted") {
                   try {
-                    new Notification("Vitalidade Farmácia - Pedido Despachado", {
+                    new Notification(`${storeSettings.name} - Pedido Despachado`, {
                       body: `Seu pedido #${currOrder.id} está a caminho!`,
                       tag: `dispatch-order-${currOrder.id}`
                     });
@@ -151,7 +167,7 @@ export default function App() {
                 
                 if ("Notification" in window && Notification.permission === "granted") {
                   try {
-                    new Notification("Vitalidade Farmácia - Pedido Entregue", {
+                    new Notification(`${storeSettings.name} - Pedido Entregue`, {
                       body: `Seu pedido #${currOrder.id} foi entregue com sucesso!`,
                       tag: `done-order-${currOrder.id}`
                     });
@@ -165,7 +181,7 @@ export default function App() {
                 
                 if ("Notification" in window && Notification.permission === "granted") {
                   try {
-                    new Notification("Vitalidade Farmácia - Pedido Cancelado", {
+                    new Notification(`${storeSettings.name} - Pedido Cancelado`, {
                       body: `Seu pedido #${currOrder.id} foi cancelado.`,
                       tag: `cancel-order-${currOrder.id}`
                     });
@@ -354,15 +370,16 @@ export default function App() {
       <div className="flex-1 w-full flex flex-col justify-between">
         <AnimatePresence mode="wait">
           {screen === "splash" && (
-            <Splash onComplete={handleSplashComplete} />
+            <Splash storeSettings={storeSettings} onComplete={handleSplashComplete} />
           )}
 
           {screen === "login" && (
-            <Login onLoginSuccess={handleLoginSuccess} />
+            <Login storeSettings={storeSettings} onLoginSuccess={handleLoginSuccess} />
           )}
 
           {screen === "client" && user && (
             <ClientHome 
+              storeSettings={storeSettings}
               user={user}
               onProductSelect={(id) => { setSelectedProductId(id); setScreen("product_detail"); }}
               onCartSelect={() => handleTabChange("cart")}
@@ -413,6 +430,8 @@ export default function App() {
 
           {screen === "admin" && user && (
             <AdminPanel 
+              storeSettings={storeSettings}
+              onSettingsUpdate={(newSettings) => setStoreSettings(newSettings)}
               adminUser={user}
               onNavigateBack={() => { setScreen("profile"); setActiveTab("profile"); }}
             />

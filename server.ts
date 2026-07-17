@@ -182,76 +182,84 @@ if (supabase && supabaseServiceKey) {
         }
       }
 
-      if (!user) {
-        if (!whatsapp) {
-          return res.status(400).json({ error: "O número de WhatsApp é obrigatório para cadastro com Google." });
+      // If user does not exist or does not have both whatsapp and address
+      const isMissingInfo = !user || !user.whatsapp || !user.address;
+      if (isMissingInfo) {
+        const { whatsapp: reqWhatsapp, address: reqAddress, name: reqName } = req.body;
+        if (!reqWhatsapp || !reqAddress) {
+          return res.status(400).json({ 
+            error: "Cadastro incompleto. Por favor, forneça o número de WhatsApp e endereço para entrega.", 
+            needsProfile: true 
+          });
         }
 
-        let supabaseId = "user-google-" + Math.random().toString(36).substr(2, 9);
-        if (supabase) {
-          try {
-            const password = email + "_google_pwd_v1";
-            let adminData: any = null;
-            let adminError: any = { message: "No service role key" };
+        if (!user) {
+          let supabaseId = "user-google-" + Math.random().toString(36).substr(2, 9);
+          if (supabase) {
+            try {
+              const password = email + "_google_pwd_v1";
+              let adminData: any = null;
+              let adminError: any = { message: "No service role key" };
 
-            if (supabaseServiceKey) {
-              const res = await supabase.auth.admin.createUser({
-                email,
-                password,
-                email_confirm: true,
-                user_metadata: { name: name || email.split("@")[0], whatsapp }
-              });
-              adminData = res.data;
-              adminError = res.error;
-            }
+              if (supabaseServiceKey) {
+                const res = await supabase.auth.admin.createUser({
+                  email,
+                  password,
+                  email_confirm: true,
+                  user_metadata: { name: reqName || email.split("@")[0], whatsapp: reqWhatsapp, address: reqAddress }
+                });
+                adminData = res.data;
+                adminError = res.error;
+              }
 
-            if (adminError) {
-              const { data, error } = await supabase.auth.signUp({
-                email,
-                password,
-                options: {
-                  data: { name: name || email.split("@")[0], whatsapp }
-                }
-              });
-              if (data.user) supabaseId = data.user.id;
-            } else if (adminData?.user) {
-              supabaseId = adminData.user.id;
+              if (adminError) {
+                const { data, error } = await supabase.auth.signUp({
+                  email,
+                  password,
+                  options: {
+                    data: { name: reqName || email.split("@")[0], whatsapp: reqWhatsapp, address: reqAddress }
+                  }
+                });
+                if (data.user) supabaseId = data.user.id;
+              } else if (adminData?.user) {
+                supabaseId = adminData.user.id;
+              }
+            } catch (supErr: any) {
+              console.error("Failed to persist Google user in Supabase:", supErr.message);
             }
-          } catch (supErr: any) {
-            console.error("Failed to persist Google user in Supabase:", supErr.message);
           }
-        }
 
-        // Create new client user with WhatsApp
-        user = db.addUser({
-          id: supabaseId,
-          email,
-          name: name || email.split("@")[0].replace(".", " "),
-          role: UserRole.CLIENT,
-          avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuCOTJF9BDj3cbHUIo5z425NXtv-6jab9X0me8Cg7SvnJxaecC3g2nFEs_AyTfy_5OX6dIFCs5rfi-46cR21-QpH0fXw8wTOW9Ylvt4L5YpZOrAL5S1hftzg2X_S7XkTE9gmetub5hgpVHAGJbm1HFmydP2SaMvMTBJPQd56l3ywx8Iqm_tioBOcgIxUGfbY69HELEDGqVVG7R7-YKBz4TT1uLL0MNlhUZtsTrDOHpCoqpGI9dPIH23a",
-          ordersCount: 0,
-          couponsCount: 1,
-          whatsapp: whatsapp,
-          address: ""
-        });
-      } else if (!user.whatsapp) {
-        if (!whatsapp) {
-          return res.status(400).json({ error: "O número de WhatsApp é obrigatório para sua conta." });
-        }
-        user.whatsapp = whatsapp;
-        db.updateUser(user);
+          user = db.addUser({
+            id: supabaseId,
+            email,
+            name: reqName || email.split("@")[0].replace(".", " "),
+            role: UserRole.CLIENT,
+            avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuCOTJF9BDj3cbHUIo5z425NXtv-6jab9X0me8Cg7SvnJxaecC3g2nFEs_AyTfy_5OX6dIFCs5rfi-46cR21-QpH0fXw8wTOW9Ylvt4L5YpZOrAL5S1hftzg2X_S7XkTE9gmetub5hgpVHAGJbm1HFmydP2SaMvMTBJPQd56l3ywx8Iqm_tioBOcgIxUGfbY69HELEDGqVVG7R7-YKBz4TT1uLL0MNlhUZtsTrDOHpCoqpGI9dPIH23a",
+            ordersCount: 0,
+            couponsCount: 1,
+            whatsapp: reqWhatsapp,
+            address: reqAddress
+          });
+        } else {
+          // User exists but has missing info
+          user.whatsapp = reqWhatsapp;
+          user.address = reqAddress;
+          if (reqName) user.name = reqName;
+          db.updateUser(user);
 
-        // Update in Supabase too
-        if (supabase) {
-          try {
-            await supabase.auth.updateUser({
-              data: { whatsapp }
-            });
-          } catch (err) {
-            console.warn("Failed to update user metadata in Supabase:", err);
+          // Update in Supabase
+          if (supabase) {
+            try {
+              await supabase.auth.updateUser({
+                data: { whatsapp: reqWhatsapp, address: reqAddress }
+              });
+            } catch (err) {
+              console.warn("Failed to update user metadata in Supabase:", err);
+            }
           }
         }
       }
+
       return res.json({ user, token: user.id });
     }
 
@@ -388,7 +396,9 @@ if (supabase && supabaseServiceKey) {
 
     if (search) {
       const q = (search as string).toLowerCase();
-      db.addSearchTerm("anonymous", q);
+      const currentUser = getSessionUser(req);
+      const userId = currentUser ? currentUser.id : "anonymous";
+      db.addSearchTerm(userId, q);
       list = list.filter(p => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q));
     }
 
@@ -411,8 +421,10 @@ if (supabase && supabaseServiceKey) {
     const prod = db.getProducts().find(p => p.id === req.params.id);
     if (!prod) return res.status(404).json({ error: "Produto não encontrado." });
 
-    // increment view count
-    db.addViewHistory("anonymous", prod.id, 8);
+    // increment view count with actual user ID if logged in
+    const currentUser = getSessionUser(req);
+    const userId = currentUser ? currentUser.id : "anonymous";
+    db.addViewHistory(userId, prod.id, 8);
     res.json(prod);
   });
 
@@ -579,6 +591,78 @@ if (supabase && supabaseServiceKey) {
     db.updateOrderStatus(req.params.id, status);
     db.addLog(user.id, user.name, "Alteração de Pedido", `Pedido #${req.params.id} alterado para "${status}".`);
     res.json({ success: true });
+  });
+
+  // Store Settings
+  app.get("/api/store/settings", (req, res) => {
+    res.json(db.getStoreSettings());
+  });
+
+  app.post("/api/store/settings", (req, res) => {
+    const admin = getSessionUser(req);
+    if (!admin || admin.role !== UserRole.ADMIN) {
+      return res.status(403).json({ error: "Não autorizado." });
+    }
+    const { name, logoUrl } = req.body;
+    if (!name || !logoUrl) {
+      return res.status(400).json({ error: "Nome e logo são obrigatórios." });
+    }
+    const updated = db.updateStoreSettings({ name, logoUrl });
+    db.addLog(admin.id, admin.name, "Configuração da Loja", `Nome alterado para "${name}" e logo atualizado.`);
+    res.json(updated);
+  });
+
+  // Users list with insights (searched and bought)
+  app.get("/api/users", (req, res) => {
+    const admin = getSessionUser(req);
+    if (!admin || admin.role !== UserRole.ADMIN) {
+      return res.status(403).json({ error: "Não autorizado." });
+    }
+
+    const allUsers = db.getUsers();
+    const orders = db.getOrders();
+
+    const usersWithInsights = allUsers.map(user => {
+      // 1. Get most searched terms
+      const searchTerms = db.getSearchHistory(user.id);
+      const searchCounts: { [term: string]: number } = {};
+      searchTerms.forEach(item => {
+        const term = item.term.trim().toLowerCase();
+        if (term) {
+          searchCounts[term] = (searchCounts[term] || 0) + 1;
+        }
+      });
+      const sortedSearches = Object.entries(searchCounts)
+        .map(([term, count]) => ({ term, count }))
+        .sort((a, b) => b.count - a.count);
+
+      // 2. Get most purchased products
+      const userOrders = orders.filter(o => o.userId === user.id && o.status !== "Cancelado");
+      const purchaseCounts: { [productName: string]: number } = {};
+      userOrders.forEach(order => {
+        order.items.forEach(item => {
+          purchaseCounts[item.name] = (purchaseCounts[item.name] || 0) + item.quantity;
+        });
+      });
+      const sortedPurchased = Object.entries(purchaseCounts)
+        .map(([productName, count]) => ({ productName, count }))
+        .sort((a, b) => b.count - a.count);
+
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        whatsapp: user.whatsapp || "Não informado",
+        address: user.address || "Não informado",
+        role: user.role,
+        avatar: user.avatar,
+        ordersCount: userOrders.length,
+        mostSearched: sortedSearches,
+        mostPurchased: sortedPurchased
+      };
+    });
+
+    res.json(usersWithInsights);
   });
 
   // Coupons

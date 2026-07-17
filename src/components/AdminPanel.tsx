@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { User, Product, Category, Promotion, Flyer, Order, AdminLog, DashboardStats, Coupon } from "../types.js";
+import { User, Product, Category, Promotion, Flyer, Order, AdminLog, DashboardStats, Coupon, StoreSettings } from "../types.js";
 import { api } from "../lib/api.js";
 import { 
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
@@ -7,18 +7,21 @@ import {
 } from "recharts";
 import { 
   LayoutDashboard, ShoppingBag, FolderTree, Tag, ClipboardList, Plus, Edit2, Trash2, 
-  Search, ShieldAlert, Check, RefreshCw, Layers, Sparkles, Loader2, Save, Ticket 
+  Search, ShieldAlert, Check, RefreshCw, Layers, Sparkles, Loader2, Save, Ticket,
+  Settings, Users
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 interface AdminPanelProps {
+  storeSettings: StoreSettings;
+  onSettingsUpdate: (newSettings: StoreSettings) => void;
   adminUser: User;
   onNavigateBack: () => void;
 }
 
-type AdminTab = "dashboard" | "products" | "categories" | "promotions" | "orders" | "logs" | "coupons";
+type AdminTab = "dashboard" | "products" | "categories" | "promotions" | "orders" | "logs" | "coupons" | "settings" | "users";
 
-export default function AdminPanel({ adminUser, onNavigateBack }: AdminPanelProps) {
+export default function AdminPanel({ storeSettings, onSettingsUpdate, adminUser, onNavigateBack }: AdminPanelProps) {
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
   const [stats, setStats] = useState<DashboardStats | null>(null);
   
@@ -88,6 +91,59 @@ export default function AdminPanel({ adminUser, onNavigateBack }: AdminPanelProp
   // Stats reset states
   const [resetting, setResetting] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  // Store Settings state
+  const [settingsName, setSettingsName] = useState(storeSettings.name);
+  const [settingsLogoUrl, setSettingsLogoUrl] = useState(storeSettings.logoUrl);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsSuccess, setSettingsSuccess] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+
+  // Users state
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Store settings sync
+  useEffect(() => {
+    setSettingsName(storeSettings.name);
+    setSettingsLogoUrl(storeSettings.logoUrl);
+  }, [storeSettings]);
+
+  // Load users on demand
+  useEffect(() => {
+    if (activeTab === "users") {
+      const fetchUsers = async () => {
+        setLoadingUsers(true);
+        try {
+          const list = await api.getUsers();
+          setUsersList(list);
+        } catch (err) {
+          console.error("Erro ao carregar usuários:", err);
+        } finally {
+          setLoadingUsers(false);
+        }
+      };
+      fetchUsers();
+    }
+  }, [activeTab]);
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingSettings(true);
+    setSettingsSuccess(false);
+    setSettingsError(null);
+    try {
+      const updated = await api.updateStoreSettings({ name: settingsName, logoUrl: settingsLogoUrl });
+      onSettingsUpdate(updated);
+      setSettingsSuccess(true);
+      // Log this action to admin log
+      await api.getLogs(); // refresh logs
+    } catch (err: any) {
+      setSettingsError(err.message || "Erro ao salvar configurações");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   const handleResetStats = async () => {
     setResetting(true);
@@ -564,6 +620,24 @@ export default function AdminPanel({ adminUser, onNavigateBack }: AdminPanelProp
             }`}
           >
             <ShieldAlert className="w-4 h-4" /> Logs de Auditoria
+          </button>
+
+          <button 
+            onClick={() => setActiveTab("users")}
+            className={`flex items-center gap-2.5 px-4 py-3 rounded-xl font-bold text-xs transition-all w-full text-left cursor-pointer ${
+              activeTab === "users" ? "bg-[#d5e3ff] text-[#003e7a]" : "bg-white hover:bg-[#efeded] text-[#727783]"
+            }`}
+          >
+            <Users className="w-4 h-4" /> Usuários e Insights
+          </button>
+
+          <button 
+            onClick={() => setActiveTab("settings")}
+            className={`flex items-center gap-2.5 px-4 py-3 rounded-xl font-bold text-xs transition-all w-full text-left cursor-pointer ${
+              activeTab === "settings" ? "bg-[#d5e3ff] text-[#003e7a]" : "bg-white hover:bg-[#efeded] text-[#727783]"
+            }`}
+          >
+            <Settings className="w-4 h-4" /> Personalização / Logo
           </button>
         </nav>
 
@@ -1312,6 +1386,190 @@ export default function AdminPanel({ adminUser, onNavigateBack }: AdminPanelProp
                             </div>
                           </div>
                         ))}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Settings Tab */}
+              {activeTab === "settings" && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="space-y-6"
+                >
+                  <div className="bg-white p-6 rounded-xl border border-[#c2c6d3]/40 shadow-xs">
+                    <h3 className="text-base font-bold text-[#1b1c1c] mb-1 flex items-center gap-2">
+                      <Settings className="w-5 h-5 text-[#003e7a]" />
+                      Personalização da Loja / Farmácia
+                    </h3>
+                    <p className="text-[11px] text-[#727783] mb-6">
+                      Altere o Nome da sua Loja e o Link do Logo que aparecem na tela de abertura (Splash), na tela de login e no cabeçalho do aplicativo do cliente.
+                    </p>
+
+                    {settingsSuccess && (
+                      <div className="mb-4 bg-[#006d38]/10 text-[#006d38] border border-[#006d38]/20 px-4 py-3 rounded-lg text-xs font-bold flex items-center gap-2">
+                        <Check className="w-4 h-4 flex-shrink-0" />
+                        Configurações salvas e aplicadas com sucesso em toda a plataforma!
+                      </div>
+                    )}
+
+                    {settingsError && (
+                      <div className="mb-4 bg-[#ba1a1a]/10 text-[#ba1a1a] border border-[#ba1a1a]/20 px-4 py-3 rounded-lg text-xs font-bold">
+                        {settingsError}
+                      </div>
+                    )}
+
+                    <form onSubmit={handleSaveSettings} className="space-y-5">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-xs font-bold text-[#424751]">Nome da Loja</label>
+                          <input 
+                            type="text"
+                            required
+                            placeholder="Ex: Vitalidade Farmácia"
+                            className="rounded-lg border bg-white px-3.5 py-2.5 text-xs focus:border-[#003e7a] outline-none font-medium" 
+                            value={settingsName}
+                            onChange={(e) => setSettingsName(e.target.value)}
+                          />
+                          <p className="text-[10px] text-[#727783]">Nome exibido em títulos, cabeçalhos e assistente virtual.</p>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-xs font-bold text-[#424751]">Link do Logo (URL da Imagem)</label>
+                          <input 
+                            type="url"
+                            required
+                            placeholder="https://exemplo.com/logo.png"
+                            className="rounded-lg border bg-white px-3.5 py-2.5 text-xs focus:border-[#003e7a] outline-none" 
+                            value={settingsLogoUrl}
+                            onChange={(e) => setSettingsLogoUrl(e.target.value)}
+                          />
+                          <p className="text-[10px] text-[#727783]">Cole um link direto da imagem do seu logotipo (PNG ou SVG transparente preferencialmente).</p>
+                        </div>
+                      </div>
+
+                      {/* Visual Preview Section */}
+                      <div className="border-t pt-4 mt-2">
+                        <label className="text-xs font-bold text-[#424751] block mb-2">Visualização Prévia</label>
+                        <div className="bg-[#fbf9f8] rounded-xl p-6 border border-[#c2c6d3]/30 flex flex-col items-center justify-center gap-3">
+                          <div className="h-14 flex items-center justify-center p-2 bg-white rounded-lg border shadow-xs max-w-full">
+                            <img 
+                              src={settingsLogoUrl || "https://images.unsplash.com/photo-1584017911766-d451b3d0e843?q=80&w=200&auto=format&fit=crop"} 
+                              alt="Logo Preview" 
+                              className="h-full object-contain max-w-[280px]"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1584017911766-d451b3d0e843?q=80&w=200&auto=format&fit=crop";
+                              }}
+                            />
+                          </div>
+                          <span className="text-[11px] font-extrabold text-[#003e7a] tracking-wide">{settingsName || "Nome da Loja"}</span>
+                          <span className="text-[9px] text-[#727783] bg-[#efeded] px-2 py-0.5 rounded font-semibold uppercase">Como aparecerá no aplicativo</span>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end pt-2 border-t">
+                        <button 
+                          type="submit"
+                          disabled={savingSettings}
+                          className="bg-[#003e7a] hover:bg-[#002850] text-white font-bold text-xs px-5 py-3 rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          {savingSettings ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Salvando...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              Salvar Alterações
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Users & Insights Tab */}
+              {activeTab === "users" && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="space-y-6"
+                >
+                  <div className="bg-white p-6 rounded-xl border border-[#c2c6d3]/40 shadow-xs">
+                    <div className="flex justify-between items-center mb-1">
+                      <h3 className="text-base font-bold text-[#1b1c1c] flex items-center gap-2">
+                        <Users className="w-5 h-5 text-[#003e7a]" />
+                        Clientes e Insights de Compras
+                      </h3>
+                      <span className="bg-[#d5e3ff] text-[#003e7a] text-xs font-bold px-2.5 py-0.5 rounded-full">
+                        {usersList.length} cadastrados
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#727783] mb-4">
+                      Veja a lista completa de clientes cadastrados, com históricos de buscas personalizadas e preferências de compras deduzidas pela Inteligência Artificial.
+                    </p>
+
+                    {loadingUsers ? (
+                      <div className="py-12 text-center text-[#727783] flex flex-col items-center justify-center gap-2">
+                        <Loader2 className="w-6 h-6 text-[#003e7a] animate-spin" />
+                        <span className="text-xs">Carregando lista de clientes...</span>
+                      </div>
+                    ) : usersList.length === 0 ? (
+                      <div className="py-12 text-center text-xs text-[#727783] font-medium border border-dashed rounded-xl">
+                        Nenhum cliente cadastrado no sistema ainda.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto border border-[#c2c6d3]/30 rounded-xl">
+                        <table className="w-full text-left text-xs text-[#1b1c1c] border-collapse">
+                          <thead>
+                            <tr className="bg-[#f5f3f3] border-b text-[#424751] font-bold">
+                              <th className="p-3">Nome / WhatsApp</th>
+                              <th className="p-3">E-mail</th>
+                              <th className="p-3">Endereço de Entrega</th>
+                              <th className="p-3">Buscas Inteligentes</th>
+                              <th className="p-3">Mais Comprado (IA)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            {usersList.map((usr) => (
+                              <tr key={usr.id} className="hover:bg-[#fbf9f8]/40 transition-colors">
+                                <td className="p-3">
+                                  <p className="font-bold text-[#003e7a]">{usr.name}</p>
+                                  <p className="text-[10px] text-[#727783] font-semibold mt-0.5">{usr.whatsapp || "Sem WhatsApp"}</p>
+                                </td>
+                                <td className="p-3 text-[#424751] font-medium">{usr.email}</td>
+                                <td className="p-3 text-[#424751] text-[11px] max-w-[200px] truncate" title={usr.address}>
+                                  {usr.address || "Não informado"}
+                                </td>
+                                <td className="p-3">
+                                  {usr.insights?.mostSearched ? (
+                                    <span className="bg-[#efeded] text-[#1b1c1c] font-bold text-[10px] px-2 py-0.5 rounded-lg border">
+                                      {usr.insights.mostSearched}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[#727783] text-[10px] italic">Sem dados de busca</span>
+                                  )}
+                                </td>
+                                <td className="p-3">
+                                  {usr.insights?.mostPurchased ? (
+                                    <span className="bg-[#e8fbf0] text-[#006d38] font-bold text-[10px] px-2 py-0.5 rounded-lg border border-[#006d38]/20">
+                                      {usr.insights.mostPurchased}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[#727783] text-[10px] italic">Nenhuma compra</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     )}
                   </div>

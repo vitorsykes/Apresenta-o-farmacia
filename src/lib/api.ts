@@ -1,4 +1,4 @@
-import { User, Product, Category, Promotion, Flyer, Order, Coupon, AdminLog, DashboardStats } from "../types.js";
+import { User, Product, Category, Promotion, Flyer, Order, Coupon, AdminLog, DashboardStats, StoreSettings } from "../types.js";
 
 const getHeaders = () => {
   const token = localStorage.getItem("vitalidade_token");
@@ -13,11 +13,11 @@ const getHeaders = () => {
 
 export const api = {
   // Auth
-  login: async (email: string, password?: string, googleToken?: string, whatsapp?: string, name?: string): Promise<{ user: User; token: string }> => {
+  login: async (email: string, password?: string, googleToken?: string, whatsapp?: string, name?: string, address?: string): Promise<{ user: User; token: string }> => {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, googleToken, whatsapp, name })
+      body: JSON.stringify({ email, password, googleToken, whatsapp, name, address })
     });
     if (!res.ok) {
       const err = await res.json();
@@ -308,6 +308,29 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ term })
     });
+    return res.json();
+  },
+
+  // Admin users list and store settings
+  getUsers: async (): Promise<any[]> => {
+    const res = await fetch("/api/users", { headers: getHeaders() });
+    if (!res.ok) throw new Error("Erro ao carregar usuários");
+    return res.json();
+  },
+
+  getStoreSettings: async (): Promise<StoreSettings> => {
+    const res = await fetch("/api/store/settings");
+    if (!res.ok) throw new Error("Erro ao carregar configurações da loja");
+    return res.json();
+  },
+
+  updateStoreSettings: async (settings: { name: string; logoUrl: string }): Promise<StoreSettings> => {
+    const res = await fetch("/api/store/settings", {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(settings)
+    });
+    if (!res.ok) throw new Error("Erro ao atualizar configurações da loja");
     return res.json();
   }
 };

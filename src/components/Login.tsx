@@ -1,16 +1,17 @@
 import React, { useState } from "react";
 import { api } from "../lib/api.js";
-import { User } from "../types.js";
+import { User, StoreSettings } from "../types.js";
 import { motion, AnimatePresence } from "motion/react";
 import { Mail, Lock, Eye, EyeOff, Key, User as UserIcon, LogIn, ArrowLeft, Phone, MapPin } from "lucide-react";
 
 interface LoginProps {
+  storeSettings: StoreSettings;
   onLoginSuccess: (user: User) => void;
 }
 
 type AuthMode = "login" | "register" | "forgotPassword";
 
-export default function Login({ onLoginSuccess }: LoginProps) {
+export default function Login({ storeSettings, onLoginSuccess }: LoginProps) {
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,11 +23,16 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Google login states forcing WhatsApp
-  const [showGooglePrompt, setShowGooglePrompt] = useState(false);
-  const [googleEmail, setGoogleEmail] = useState("eufui.turismo.contato@gmail.com");
-  const [googleName, setGoogleName] = useState("Eufui Turismo");
+  // Google login states supporting account selector
+  const [showGoogleSelect, setShowGoogleSelect] = useState(false);
+  const [showGoogleProfilePrompt, setShowGoogleProfilePrompt] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState("");
+  const [googleName, setGoogleName] = useState("");
   const [googleWhatsapp, setGoogleWhatsapp] = useState("");
+  const [googleAddress, setGoogleAddress] = useState("");
+  const [customEmail, setCustomEmail] = useState("");
+  const [customName, setCustomName] = useState("");
+  const [isCustomAccount, setIsCustomAccount] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,32 +69,48 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = () => {
     setError(null);
     setSuccessMsg(null);
+    setShowGoogleSelect(true);
+    setShowGoogleProfilePrompt(false);
+    setIsCustomAccount(false);
+  };
+
+  const handleSelectGoogleAccount = async (emailToUse: string, nameToUse: string) => {
+    setError(null);
     setLoading(true);
+    setGoogleEmail(emailToUse);
+    setGoogleName(nameToUse);
+
     try {
-      // Tenta fazer login diretamente com o e-mail padrão do Google, caso o usuário já esteja cadastrado.
-      const response = await api.login(googleEmail, undefined, "google-mock-token");
+      const response = await api.login(emailToUse, undefined, "google-mock-token");
       onLoginSuccess(response.user);
     } catch (err: any) {
-      // Se não estiver cadastrado (retorna erro que WhatsApp é obrigatório), mostra o prompt para preencher WhatsApp e Nome.
-      setShowGooglePrompt(true);
+      setShowGoogleSelect(false);
+      setShowGoogleProfilePrompt(true);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogleSubmit = async (e: React.FormEvent) => {
+  const handleGoogleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!googleWhatsapp.trim()) {
-      setError("O número do WhatsApp é obrigatório.");
+    if (!googleWhatsapp.trim() || !googleAddress.trim()) {
+      setError("WhatsApp e Endereço são obrigatórios para concluir o primeiro acesso.");
       return;
     }
     setError(null);
     setLoading(true);
     try {
-      const response = await api.login(googleEmail, undefined, "google-mock-token", googleWhatsapp, googleName);
+      const response = await api.login(
+        googleEmail, 
+        undefined, 
+        "google-mock-token", 
+        googleWhatsapp, 
+        googleName, 
+        googleAddress
+      );
       onLoginSuccess(response.user);
     } catch (err: any) {
       setError(err.message || "Erro no login com Google.");
@@ -102,9 +124,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       <main className="w-full max-w-md bg-white rounded-xl shadow-lg border border-[#c2c6d3]/30 p-6 md:p-8 flex flex-col gap-6 overflow-hidden relative">
         <div className="flex flex-col items-center justify-center space-y-4">
           <img 
-            alt="PharmaCare Logo" 
+            alt={`${storeSettings.name} Logo`} 
             className="h-16 object-contain" 
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6i7zlH0ucNVZqyQTI4kAbRn88Nay0-Xb7uNMDNj4gBGdRRYCZndzvuuDZq_difdf81jjJLBsQZwY8vZH61S28d91z2xvNEH5T9WQfc3Xr1o1Z8qPHEGLswjYnYaMNEs0Il7E8dTkpIQ8TjacNq1SkgxtAeECAdDHZZkJcusluJU7xkUw6R3-kd1BV1NWma9nLv5nASikysOsVscfpQ-L22Sm3iu2Gi8oPuu4bJAfUf8Bq5QluPkB0"
+            src={storeSettings.logoUrl}
           />
           <div className="text-center">
             <h1 className="text-2xl md:text-3xl font-bold text-[#003e7a] tracking-tight">
@@ -132,8 +154,103 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           </div>
         )}
 
-        {showGooglePrompt ? (
-          <form onSubmit={handleGoogleSubmit} className="flex flex-col gap-4">
+        {showGoogleSelect ? (
+          <div className="flex flex-col gap-4">
+            <div className="bg-[#e8f0fe] rounded-lg p-3.5 border border-[#1a73e8]/20 flex items-center gap-3">
+              <svg aria-hidden="true" className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"></path>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"></path>
+              </svg>
+              <div>
+                <p className="text-xs font-bold text-[#003e7a]">Fazer login com Google</p>
+                <p className="text-[10px] text-[#424751]">Escolha uma conta para continuar</p>
+              </div>
+            </div>
+
+            <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+              {[
+                { email: "eufui.turismo.contato@gmail.com", name: "Eufui Turismo" },
+                { email: "mariasilva@gmail.com", name: "Maria Silva" },
+                { email: "pedrosouza@gmail.com", name: "Pedro Souza" },
+                { email: "administrador@gmail.com", name: "Admin Vitalidade" }
+              ].map((acc) => (
+                <button
+                  type="button"
+                  key={acc.email}
+                  onClick={() => handleSelectGoogleAccount(acc.email, acc.name)}
+                  disabled={loading}
+                  className="w-full text-left p-3 rounded-lg border hover:bg-[#e8f0fe]/30 hover:border-[#1a73e8]/30 transition-all flex items-center justify-between group cursor-pointer"
+                >
+                  <div>
+                    <p className="text-xs font-bold text-[#1b1c1c] group-hover:text-[#003e7a]">{acc.name}</p>
+                    <p className="text-[10px] text-[#727783]">{acc.email}</p>
+                  </div>
+                  <span className="text-[10px] text-[#727783] bg-[#f5f3f3] px-2 py-0.5 rounded font-bold group-hover:bg-[#d5e3ff] group-hover:text-[#003e7a] transition-all">Selecionar</span>
+                </button>
+              ))}
+            </div>
+
+            {isCustomAccount ? (
+              <div className="space-y-3 pt-2 border-t border-dashed">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-[#1b1c1c]">E-mail Google Personalizado</label>
+                  <input
+                    type="email"
+                    placeholder="exemplo@gmail.com"
+                    required
+                    className="w-full px-4 py-2 rounded-lg border border-[#c2c6d3] bg-[#fbf9f8] focus:border-[#003e7a] outline-none text-sm text-[#1b1c1c]"
+                    value={customEmail}
+                    onChange={(e) => setCustomEmail(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-[#1b1c1c]">Nome da Conta</label>
+                  <input
+                    type="text"
+                    placeholder="Seu nome"
+                    required
+                    className="w-full px-4 py-2 rounded-lg border border-[#c2c6d3] bg-[#fbf9f8] focus:border-[#003e7a] outline-none text-sm text-[#1b1c1c]"
+                    value={customName}
+                    onChange={(e) => setCustomName(e.target.value)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (customEmail.trim() && customName.trim()) {
+                      handleSelectGoogleAccount(customEmail.trim(), customName.trim());
+                    } else {
+                      setError("Preencha o e-mail e nome personalizados.");
+                    }
+                  }}
+                  disabled={loading}
+                  className="w-full bg-[#003e7a] text-white py-2.5 rounded-lg font-bold text-xs hover:bg-[#0055a4] transition-all cursor-pointer"
+                >
+                  Entrar com Conta Personalizada
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsCustomAccount(true)}
+                className="text-xs text-[#003e7a] font-bold hover:underline py-1 text-center"
+              >
+                + Usar outra conta do Google
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => { setShowGoogleSelect(false); setError(null); }}
+              className="text-xs text-[#ba1a1a] font-bold hover:underline py-1 text-center"
+            >
+              Cancelar login Google
+            </button>
+          </div>
+        ) : showGoogleProfilePrompt ? (
+          <form onSubmit={handleGoogleProfileSubmit} className="flex flex-col gap-4">
             <div className="bg-[#e8f0fe] rounded-lg p-3.5 border border-[#1a73e8]/20 flex items-center gap-3">
               <svg aria-hidden="true" className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
@@ -143,49 +260,39 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               </svg>
               <div>
                 <p className="text-xs font-bold text-[#003e7a]">Cadastro com Google</p>
-                <p className="text-[10px] text-[#424751]">Conclua os dados abaixo para criar sua conta.</p>
+                <p className="text-[10px] text-[#424751]">Só precisamos disso no seu primeiro acesso.</p>
               </div>
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-bold text-[#1b1c1c]" htmlFor="g-email">E-mail do Google</label>
-              <input 
-                className="w-full px-4 py-2.5 rounded-lg border border-[#c2c6d3] bg-[#f5f3f3] outline-none text-sm text-[#727783] cursor-not-allowed" 
-                id="g-email" 
-                type="email" 
+              <label className="text-xs font-bold text-[#1b1c1c]">E-mail Google</label>
+              <input
+                className="w-full px-4 py-2 rounded-lg border border-[#c2c6d3] bg-[#f5f3f3] outline-none text-sm text-[#727783] cursor-not-allowed"
+                type="email"
                 value={googleEmail}
                 readOnly
               />
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-bold text-[#1b1c1c]" htmlFor="g-name">Seu Nome</label>
-              <div className="relative">
-                <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-[#727783] w-5 h-5" />
-                <input 
-                  className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-[#c2c6d3] bg-[#fbf9f8] focus:border-[#003e7a] focus:ring-1 focus:ring-[#003e7a] outline-none transition-colors text-sm text-[#1b1c1c]" 
-                  id="g-name" 
-                  placeholder="Seu nome completo" 
-                  type="text" 
-                  value={googleName}
-                  onChange={(e) => setGoogleName(e.target.value)}
-                  required
-                />
-              </div>
+              <label className="text-xs font-bold text-[#1b1c1c]">Nome Completo</label>
+              <input
+                className="w-full px-4 py-2 rounded-lg border border-[#c2c6d3] bg-[#fbf9f8] focus:border-[#003e7a] outline-none text-sm text-[#1b1c1c]"
+                type="text"
+                value={googleName}
+                onChange={(e) => setGoogleName(e.target.value)}
+                required
+              />
             </div>
 
             <div className="flex flex-col gap-1">
-              <div className="flex justify-between">
-                <label className="text-xs font-bold text-[#1b1c1c]" htmlFor="g-whatsapp">WhatsApp (Obrigatório)</label>
-                <span className="text-[10px] font-bold text-[#ba1a1a]">Campo Obrigatório</span>
-              </div>
+              <label className="text-xs font-bold text-[#1b1c1c]">WhatsApp (Com DDD)</label>
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-[#727783] w-5 h-5" />
-                <input 
-                  className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-[#c2c6d3] bg-[#fbf9f8] focus:border-[#003e7a] focus:ring-1 focus:ring-[#003e7a] outline-none transition-colors text-sm text-[#1b1c1c]" 
-                  id="g-whatsapp" 
-                  placeholder="(99) 99999-9999" 
-                  type="tel" 
+                <input
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-[#c2c6d3] bg-[#fbf9f8] focus:border-[#003e7a] outline-none text-sm text-[#1b1c1c]"
+                  placeholder="(00) 00000-0000"
+                  type="tel"
                   value={googleWhatsapp}
                   onChange={(e) => setGoogleWhatsapp(e.target.value)}
                   required
@@ -193,20 +300,35 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               </div>
             </div>
 
-            <button 
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-bold text-[#1b1c1c]">Endereço para Entrega</label>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-[#727783] w-5 h-5" />
+                <input
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-[#c2c6d3] bg-[#fbf9f8] focus:border-[#003e7a] outline-none text-sm text-[#1b1c1c]"
+                  placeholder="Rua, número, complemento, bairro"
+                  type="text"
+                  value={googleAddress}
+                  onChange={(e) => setGoogleAddress(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <button
               disabled={loading}
-              className="w-full bg-[#1a73e8] text-white py-3 rounded-lg font-bold hover:bg-[#1557b0] active:scale-[0.98] transition-all shadow-sm flex items-center justify-center gap-2 mt-2 text-sm disabled:opacity-50" 
+              className="w-full bg-[#1a73e8] text-white py-3 rounded-lg font-bold hover:bg-[#1557b0] transition-all text-sm disabled:opacity-50"
               type="submit"
             >
-              {loading ? "Processando..." : "Confirmar e Cadastrar"}
+              {loading ? "Concluindo..." : "Salvar e Entrar"}
             </button>
 
-            <button 
-              onClick={() => { setShowGooglePrompt(false); setError(null); }}
-              className="w-full text-xs text-[#727783] font-bold hover:underline py-2 text-center"
+            <button
+              onClick={() => { setShowGoogleProfilePrompt(false); setShowGoogleSelect(true); }}
+              className="text-xs text-[#727783] font-bold hover:underline py-1 text-center"
               type="button"
             >
-              Voltar ao Login
+              Voltar à seleção de contas
             </button>
           </form>
         ) : (

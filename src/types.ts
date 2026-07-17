@@ -94,6 +94,9 @@ export interface Order {
     zipCode: string;
   };
   createdAt: string;
+  whatsapp?: string;
+  needsChange?: boolean | null;
+  changeAmount?: string;
 }
 
 export interface Coupon {
@@ -122,4 +125,9 @@ export interface DashboardStats {
   usersCount: number;
   outOfStockCount: number;
   nearExpiryCount: number;
+}
+
+export interface StoreSettings {
+  name: string;
+  logoUrl: string;
 }

@@ -1,11 +1,13 @@
 import { useEffect } from "react";
 import { motion } from "motion/react";
+import { StoreSettings } from "../types.js";
 
 interface SplashProps {
+  storeSettings: StoreSettings;
   onComplete: () => void;
 }
 
-export default function Splash({ onComplete }: SplashProps) {
+export default function Splash({ storeSettings, onComplete }: SplashProps) {
   useEffect(() => {
     const timer = setTimeout(() => {
       onComplete();
@@ -23,10 +25,11 @@ export default function Splash({ onComplete }: SplashProps) {
           className="flex flex-col items-center justify-center space-y-6"
         >
           <img 
-            alt="Vitalidade Farmácia Logo" 
+            alt={`${storeSettings.name} Logo`} 
             className="w-64 md:w-80 h-auto object-contain drop-shadow-sm" 
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6i7zlH0ucNVZqyQTI4kAbRn88Nay0-Xb7uNMDNj4gBGdRRYCZndzvuuDZq_difdf81jjJLBsQZwY8vZH61S28d91z2xvNEH5T9WQfc3Xr1o1Z8qPHEGLswjYnYaMNEs0Il7E8dTkpIQ8TjacNq1SkgxtAeECAdDHZZkJcusluJU7xkUw6R3-kd1BV1NWma9nLv5nASikysOsVscfpQ-L22Sm3iu2Gi8oPuu4bJAfUf8Bq5QluPkB0"
+            src={storeSettings.logoUrl}
           />
+          <h2 className="font-extrabold text-lg text-[#003e7a] tracking-tight">{storeSettings.name}</h2>
           
           <div className="pt-8 flex space-x-2 items-center justify-center">
             <motion.div 
